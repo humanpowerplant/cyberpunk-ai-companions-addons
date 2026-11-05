@@ -16,7 +16,7 @@
 - 日本語ページ：`japanese/description.ja.bbcode.txt`。短い英語案内もあります。
 - Codexページ：`codex/description.en.bbcode.txt`。日本語部分も含みます。別途 `description.ja.bbcode.txt` も用意しています。
 - 各ページのMain fileには、該当するインストール用ZIPを1本。**RC / 0.4.6専用** とファイル説明に明記してください。
-- ソースZIPはOptional / Miscellaneous等の開発者向けファイルにできます。一般ユーザーには必須にしません。GitHubを公開した場合は説明へソースURLを追加できます。
+- ソースZIPはOptional / Miscellaneous等の開発者向けファイルにできます。一般ユーザーには必須にしません。公開ソースと不具合報告先は[GitHubリポジトリ](https://github.com/humanpowerplant/cyberpunk-ai-companions-addons)です。各説明文にもリンクを追加済みです。
 - 本体0.4.6は同梱しません。Requirementsに[元Mod](https://www.nexusmods.com/cyberpunk2077/mods/35436)を指定します。
 
 Nexusプレビューで見出し・リスト・リンク・日本語spoilerを確認してください。貼付した説明の見え方は、ローカルのMarkdown確認では保証できません。

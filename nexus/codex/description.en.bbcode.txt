@@ -52,3 +52,5 @@ This release candidate targets 0.4.6 / game2.5 / Windows・Vortex. Other version
 
 Codexを使う場合のみ、公式CLIと本人のChatGPTログインが必要です。ゲーム内フォルダーのred4ext/plugins/AiNpcCodexBridge/Login.cmdを一度自分で実行します。Codexはクラウドへ送信する方式で、無料・無制限・オフラインを保証しません。詳しい導入、データ送信、更新・削除は同梱の日本語READMEを参照してください。
 [/spoiler]
+
+[b]Source, guides and issue reports:[/b] [url=https://github.com/humanpowerplant/cyberpunk-ai-companions-addons]GitHub[/url]

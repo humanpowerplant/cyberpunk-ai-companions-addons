@@ -21,3 +21,5 @@ Codexを選ぶ場合のみ公式CLIと本人のChatGPTログインが必要で�
 [b]Codexはクラウドへ送る方式で、ローカルLLMではありません。[/b] 利用枠・費用・保持条件は本人の契約とサービスに従います。会話材料・許可したゲーム状況が送信され、本体で画像を有効にした場合はゲーム画像、クラウド音声では台詞や参照音声も送信対象です。認証・受信上限・取消・read-only sandbox等を備えますが、同一Windowsアカウントの悪意あるソフトまで隔離する保証ではありません。
 
 公開候補の確認範囲と導入・更新・削除・対処手順は同梱READMEへ。元Mod：Alystria AI。Convaiと元ライセンス・第三者通知を保持。ゲーム音声・抽出台本・モデル・Runtime・個人認証・履歴は同梱しません。コード・日本語設定・文書・画像レイアウトに生成AIを使用しています（AI-Generated Content / AI Media）。
+
+[b]ソース・説明・不具合報告:[/b] [url=https://github.com/humanpowerplant/cyberpunk-ai-companions-addons]GitHub[/url]

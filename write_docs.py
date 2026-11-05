@@ -56,6 +56,8 @@ def main():
             "descriptionFile": f"{feature}/description.{'ja' if feature == 'japanese' else 'en'}.bbcode.txt",
             "cover": f"../media/titlecards/{feature}-cover-1920x1080.png",
             "disclosure": "PERMISSIONS_AND_DISCLOSURE.ja.md",
+            "sourceRepository": "https://github.com/humanpowerplant/cyberpunk-ai-companions-addons",
+            "issueTracker": "https://github.com/humanpowerplant/cyberpunk-ai-companions-addons/issues",
         }
     exports[ROOT / "nexus/upload-metadata.json"] = json.dumps({"schema": 1, "game": "cyberpunk2077", "pages": metadata}, ensure_ascii=False, indent=2) + "\n"
     stale = []

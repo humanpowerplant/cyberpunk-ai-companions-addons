@@ -24,7 +24,9 @@
       "releaseType": "Release candidate; manual gameplay checklist remains separate",
       "descriptionFile": "japanese/description.ja.bbcode.txt",
       "cover": "../media/titlecards/japanese-cover-1920x1080.png",
-      "disclosure": "PERMISSIONS_AND_DISCLOSURE.ja.md"
+      "disclosure": "PERMISSIONS_AND_DISCLOSURE.ja.md",
+      "sourceRepository": "https://github.com/humanpowerplant/cyberpunk-ai-companions-addons",
+      "issueTracker": "https://github.com/humanpowerplant/cyberpunk-ai-companions-addons/issues"
     },
     "codex": {
       "title": "AI Companions - Party Conversations and Codex Bridge",
@@ -49,7 +51,9 @@
       "releaseType": "Release candidate; manual gameplay checklist remains separate",
       "descriptionFile": "codex/description.en.bbcode.txt",
       "cover": "../media/titlecards/codex-cover-1920x1080.png",
-      "disclosure": "PERMISSIONS_AND_DISCLOSURE.ja.md"
+      "disclosure": "PERMISSIONS_AND_DISCLOSURE.ja.md",
+      "sourceRepository": "https://github.com/humanpowerplant/cyberpunk-ai-companions-addons",
+      "issueTracker": "https://github.com/humanpowerplant/cyberpunk-ai-companions-addons/issues"
     }
   }
 }

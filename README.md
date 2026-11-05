@@ -2,6 +2,8 @@
 
 [日本語ガイド](README.ja.md) · [English guide](README.en.md)
 
+[![Source checks](https://github.com/humanpowerplant/cyberpunk-ai-companions-addons/actions/workflows/checks.yml/badge.svg)](https://github.com/humanpowerplant/cyberpunk-ai-companions-addons/actions/workflows/checks.yml)
+
 Two optional add-ons for **AI Companions using Large Language Models 0.4.6**, on **Cyberpunk 2077 2.5 / Windows**.
 
 | Add-on | Start here | Purpose |
@@ -23,6 +25,8 @@ The add-ons can be used separately or together. When using both, use the matchin
 - [Building and testing](docs/DEVELOPMENT.md)
 - [Nexus upload kit / 公開用資料](nexus/UPLOAD_GUIDE.ja.md)
 - [Screenshot plan and original title cards](media/README.ja.md)
+
+Source and issue reports: [humanpowerplant/cyberpunk-ai-companions-addons](https://github.com/humanpowerplant/cyberpunk-ai-companions-addons). For a private security report, use the repository's Security tab; never post credentials or personal conversation logs in a public issue.
 
 This is an unofficial community project. The original mod is by **Alystria AI**. Modified source remains subject to the [AI NPC Cyberpunk Mod Use License 1.2](LICENSE). Convai remains available in the original provider menu. Game recordings, voice clips, language-model weights, runtimes, account credentials and personal conversation history are not part of this source project.
 

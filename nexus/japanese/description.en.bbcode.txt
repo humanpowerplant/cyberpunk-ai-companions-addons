@@ -11,3 +11,5 @@ Select Companion Manager → Voice AI and microphone → Voice language → Japa
 No voice recordings, game scripts, models, runtime or personal state is included. Voice and microphone engines remain separate original-mod settings. See the included README for compatibility, privacy and removal.
 
 Original mod by Alystria AI. Upstream license/notices and Convai remain. Generative AI was used for added code, Japanese text, documentation and promotional layout (AI-Generated Content / AI Media).
+
+[b]Source, guides and issue reports:[/b] [url=https://github.com/humanpowerplant/cyberpunk-ai-companions-addons]GitHub[/url]

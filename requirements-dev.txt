@@ -1,0 +1,2 @@
+# Build smoke fixtures only; not shipped and not required by the game.
+lupa==2.6

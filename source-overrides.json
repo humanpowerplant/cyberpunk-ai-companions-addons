@@ -1,0 +1,151 @@
+{
+  "schema": 1,
+  "files": {
+    "japanese": [
+      {
+        "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/conversation-style.mjs",
+        "sourceFile": "overrides/japanese/app/bridge/conversation-style.mjs"
+      },
+      {
+        "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/mistral-prompt.mjs",
+        "sourceFile": "overrides/japanese/app/bridge/mistral-prompt.mjs"
+      },
+      {
+        "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/persona-sections.mjs",
+        "sourceFile": "overrides/japanese/app/bridge/persona-sections.mjs"
+      },
+      {
+        "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/prompt-profiles.mjs",
+        "sourceFile": "overrides/japanese/app/bridge/prompt-profiles.mjs"
+      }
+    ],
+    "codex": [
+      {
+        "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/convai-bridge.mjs",
+        "sourceFile": "overrides/codex/app/bridge/convai-bridge.mjs"
+      },
+      {
+        "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/conversation-style.mjs",
+        "sourceFile": "overrides/codex/app/bridge/conversation-style.mjs"
+      },
+      {
+        "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/mistral-prompt.mjs",
+        "sourceFile": "overrides/codex/app/bridge/mistral-prompt.mjs"
+      },
+      {
+        "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/prompt-profiles.mjs",
+        "sourceFile": "overrides/codex/app/bridge/prompt-profiles.mjs"
+      },
+      {
+        "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/social-controller.mjs",
+        "sourceFile": "overrides/codex/app/bridge/social-controller.mjs"
+      },
+      {
+        "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/v-voice.mjs",
+        "sourceFile": "overrides/codex/app/bridge/v-voice.mjs"
+      },
+      {
+        "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/init.lua",
+        "sourceFile": "overrides/codex/mod/init.lua"
+      },
+      {
+        "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/locales/ja.lua",
+        "sourceFile": "overrides/codex/mod/locales/ja.lua"
+      },
+      {
+        "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/manager-ui.lua",
+        "sourceFile": "overrides/codex/mod/manager-ui.lua"
+      },
+      {
+        "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/manager.lua",
+        "sourceFile": "overrides/codex/mod/manager.lua"
+      },
+      {
+        "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/social-options.lua",
+        "sourceFile": "overrides/codex/mod/social-options.lua"
+      },
+      {
+        "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/mistral-client.mjs",
+        "sourceFile": "overrides/codex/app/bridge/mistral-client.mjs"
+      },
+      {
+        "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/codex-transport.mjs",
+        "sourceFile": "overrides/codex/app/bridge/codex-transport.mjs"
+      }
+    ]
+  },
+  "combinations": {
+    "codex+japanese": [
+      {
+        "owner": "codex",
+        "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/convai-bridge.mjs",
+        "sourceFile": "overrides/combined/app/bridge/convai-bridge.mjs"
+      },
+      {
+        "owner": "codex",
+        "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/conversation-style.mjs",
+        "sourceFile": "overrides/combined/app/bridge/conversation-style.mjs"
+      },
+      {
+        "owner": "codex",
+        "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/mistral-prompt.mjs",
+        "sourceFile": "overrides/combined/app/bridge/mistral-prompt.mjs"
+      },
+      {
+        "owner": "codex",
+        "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/persona-sections.mjs",
+        "sourceFile": "overrides/combined/app/bridge/persona-sections.mjs"
+      },
+      {
+        "owner": "codex",
+        "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/prompt-profiles.mjs",
+        "sourceFile": "overrides/combined/app/bridge/prompt-profiles.mjs"
+      },
+      {
+        "owner": "codex",
+        "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/social-controller.mjs",
+        "sourceFile": "overrides/combined/app/bridge/social-controller.mjs"
+      },
+      {
+        "owner": "codex",
+        "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/v-voice.mjs",
+        "sourceFile": "overrides/combined/app/bridge/v-voice.mjs"
+      },
+      {
+        "owner": "codex",
+        "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/init.lua",
+        "sourceFile": "overrides/combined/mod/init.lua"
+      },
+      {
+        "owner": "codex",
+        "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/locales/ja.lua",
+        "sourceFile": "overrides/combined/mod/locales/ja.lua"
+      },
+      {
+        "owner": "codex",
+        "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/manager-ui.lua",
+        "sourceFile": "overrides/combined/mod/manager-ui.lua"
+      },
+      {
+        "owner": "codex",
+        "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/manager.lua",
+        "sourceFile": "overrides/combined/mod/manager.lua"
+      },
+      {
+        "owner": "codex",
+        "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/social-options.lua",
+        "sourceFile": "overrides/combined/mod/social-options.lua"
+      },
+      {
+        "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/mistral-client.mjs",
+        "sourceFile": "overrides/combined/app/bridge/mistral-client.mjs",
+        "owner": "codex"
+      },
+      {
+        "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/codex-transport.mjs",
+        "sourceFile": "overrides/combined/app/bridge/codex-transport.mjs",
+        "owner": "codex"
+      }
+    ]
+  }
+}

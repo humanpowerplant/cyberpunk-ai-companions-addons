@@ -1,0 +1,1703 @@
+// The text routes (docs/MISTRAL.md, docs/LOCAL_AI.md, docs/CUSTOM_PROVIDER.md): Mistral, the fully local AI (llama.cpp's llama-server) and the
+// player's own endpoint (OpenRouter, Nano-GPT, Ollama, LM Studio: "custom") all speak the OpenAI chat-completions protocol, so one host serves them. `TextProviderHost.reply(config)` takes the same configuration the bridge
+// hands the Convai realtime host for a turn and returns the same kind of result ({text, sessionID, timing, ...}, cleaned by the same
+// transformReply), so subtitles, Phone Chat, the local voices, the face, the emotion selector and group rounds see no difference.
+// `attachTextProvider(host, ...)` makes a RealtimeHost use this route for text turns while the provider is not Convai; everything
+// else about the host (the browser audio page, local PCM playback) is untouched.
+//
+// A route describes what differs: where the request goes and with which key, the models in order of preference (and their own
+// request fields), whether requests are paced (Mistral's free plan), how a failure is recorded on the provider, and whether a
+// failure may fall through to the next route (Local -> Mistral). Everything else (the prompt, streaming and the sentence cap, the
+// retry of a reply that broke character, memory, summaries, fact extraction) is shared and behaves identically on every route.
+import {streamChat, MistralError, DEFAULT_MODELS, VISION_MODELS, failureKind, failureDetail, newTrace, newAdaptation, tagGemini} from './mistral-client.mjs';
+import {PersonaBook, buildMessages, withRetrievedParts, cleanReply, stripPlayerEcho, stripEchoOpener, stripStockTail, speakerTurn, startsLikeLine, capPoint, capReply, breaksCharacter, leaksReasoning, looksCut, repeatsLine, dropRepeatedLines, provokesAiTalk, takesUpAiTalk, trimUnfinished,
+  summaryMessages, factMessages, capWords, overWords, remarkTokens, parseFacts, systemHead, joinBlocks, FACT_SCHEMA, LIMITS, freshNote, replyLengthStyle} from './mistral-prompt.mjs';
+import {withGroupLength} from './group-context.mjs';
+import {reactionTraceLine, claimsToDrive, DRIVE_HONEST, DRIVE_LIMIT} from './companion-actions.mjs';
+import {asksForRide} from './text-action-words.mjs';
+import {callMeetClassifier, parseCallMeetAnswer} from './call-meet.mjs';
+import {translationMessages, spokenTranslationMessages, REQUEST_TOTAL_MS, LOCAL_REQUEST_TOTAL_MS, SPOKEN_REQUEST_TOTAL_MS, LOCAL_SPOKEN_REQUEST_TOTAL_MS} from './subtitle-translation.mjs';
+import {actionMenu, reactionMenu, reactionOnlyTag, reactionChosenNotes, splitActions} from './text-actions.mjs';
+import {hasEmotionTag} from './emotion-tags.mjs';
+import {stripSpeechTags} from './natural-speech.mjs';
+import {ReplyStream} from './reply-stream.mjs';
+import {currentClock, markStage} from './turn-clock.mjs';
+import {survivingLoss} from './local-server-recovery.mjs';
+import {SLOW_TURNS} from './slow-turns.mjs';
+import {noThinkingFields} from './reasoning.mjs';
+import {worldRulesBlock} from './world-rules.mjs';
+import {LearnedLimits, learnedLimitChat, promptFitLine} from './prompt-fit.mjs';
+import {BUSY_BACKOFF_MS, HEDGE_AFTER_MS, hedged} from './hedged-request.mjs';
+import {budgetedChat, PrefillMeter, PREFILL, TokenMeter, seedRatio, templateTokens, describeFit, coldAttemptRoomMs, BUDGET} from './prompt-budget.mjs';
+import {imageReserveTokens} from './local-vision.mjs';
+import {pictureForTurn} from './vision-message.mjs';
+import {CompactChoice} from './compact-persona.mjs';
+import {replyScriptMismatch, scriptNudge} from './reply-script.mjs';
+import {LANGUAGE_NAMES} from './language-names.mjs';
+import {MatureGuard, refusalLog} from './mature-guard.mjs';
+import {allowanceFor, MATURE_PROVIDERS} from './mature-content.mjs';
+import {profileSignature} from './prompt-profiles.mjs';
+import {extraFields} from './sampler-extras.mjs';
+import {baseOf} from './memory-scope.mjs';
+import {varietyNote, freshenReply, headRepeats, dedupeHistory} from './reply-variety.mjs';
+import {fixatedKeys, fixationNote, leavesOut, dropFixatedHistory, summaryWithout} from './topic-fixation.mjs';
+import {withoutForeignReplies, ENGLISH_AGAIN_CONTEXT} from './multilingual.mjs';
+import {isChitchat} from './talk-retrieval.mjs';
+import {RecentLines, LEAN_PROFILES, echoesRecent, leaveOutEchoes, avoidNote} from './recent-lines.mjs';
+import {limitPetNames, headHasPetName} from './pet-names.mjs';
+import {asksAboutGear} from './player-gear.mjs';
+import {asksAboutClothes} from './scenery-memory.mjs';
+
+const isTag = group => hasEmotionTag(group);
+const pause = (ms, signal) => new Promise((resolve, reject) => {
+  if (signal?.aborted) return reject(cancelled());
+  const timer = setTimeout(() => { signal?.removeEventListener('abort', abort); resolve(); }, ms);
+  const abort = () => { clearTimeout(timer); reject(cancelled()); };
+  signal?.addEventListener('abort', abort, {once: true});
+});
+const cancelled = () => { const error = Error('Conversation cancelled'); error.name = 'AbortError'; return error; };
+
+// Reminder appended once when a reply broke character ("as an AI ..."); costs one more request, so only that case uses it.
+const IN_CHARACTER_NUDGE = '\n\n(Answer again as yourself, a real person in Night City, in your own words. Do not mention AI, models, prompts or rules.)';
+
+// Reminder appended once when V pushed the character to talk about being an AI and the reply took those words up, even to deny them.
+const PROVOKED_NUDGE = '\n\n(Answer again as yourself, a real person, in plain words. Do not use any of the words V used about machines, scripts, code or prompts, not even to deny them. React to the tone the way a stranger would, in words only.)';
+
+// Reminder appended once when a reply said a line the character has already said (an example line of its profile, or its own last reply).
+const FRESH_WORDS_NUDGE = '\n\n(Answer again in fresh words: do not repeat an example line or anything you have already said.)';
+
+// How long the cloud routes wait for a reply to start. Mistral answers with its first words in 0.4 to 2 s; a request with no answer
+// after 6 s is a hung connection (the network dropped it without telling anyone), and a new connection is faster than waiting. So:
+// 6 s for the first attempt, one retry with 8 s, a stream that goes quiet for 8 s is cut. The worst case is about 14.5 s, then the
+// reply is a short line in the character's voice instead of an error (HOLDING_LINES). The 2026-10-13 record had one hung request
+// wait the old 25 s limit, then a retry that answered in 2 s: 30 s for a reply.
+/**
+ * The prompt size a cloud endpoint reported, from the `usage` object of its reply: {total, cachedTokens, newTokens}, or null when it gave none.
+ * OpenAI-style endpoints (and Gemini's compatible one) put the cache hit in `prompt_tokens_details.cached_tokens` (`input_tokens_details` in OpenAI's Responses API, `prompt_cache_hit_tokens` at DeepSeek),
+ * Gemini's own field is `cached_content_token_count`.
+ */
+export function promptUsage(usage) {
+  const total = Number(usage?.prompt_tokens ?? usage?.input_tokens ?? usage?.promptTokenCount);
+  if (!Number.isFinite(total) || total <= 0) return null;
+  const reported = Number(usage?.prompt_tokens_details?.cached_tokens ?? usage?.input_tokens_details?.cached_tokens ?? usage?.prompt_cache_hit_tokens ?? usage?.cached_content_token_count
+    ?? usage?.cachedContentTokenCount ?? 0);
+  const cachedTokens = Number.isFinite(reported) ? Math.min(total, Math.max(0, Math.round(reported))) : 0;
+  return {total: Math.round(total), cachedTokens, newTokens: Math.round(total) - cachedTokens};
+}
+
+export const CLOUD_CHAT_LIMITS = Object.freeze({firstByteMs: 6000, retryFirstByteMs: 8000, stallMs: 8000, retries: 1, backoffMs: [300]});
+
+// How long the local AI may take, and how it is told when it takes too long (docs/LOCAL_AI.md, "When a local turn fails"). The game gives up on a
+// request 90 s after it wrote it (mod/init.lua) and then shows only a generic "no reply" notice, so a turn that is still waiting at that moment can
+// never explain itself. The local route therefore keeps the whole turn (the action decision, waiting for the model to load, every request, the
+// retry of a reply that broke character) inside LOCAL_TURN_BUDGET_MS, which leaves the game ten seconds to show the bridge's own failure.
+//   firstByteMs  no stream event of any kind this long after the request: the server is not working on it
+//   promptStallMs  once the first event came and before the first word (llama-server sends one per prompt batch while it reads the prompt): silence this long.
+//                  Generous: on a machine with no CPU to spare (the server runs below normal priority so the game keeps its frame rate; measured 2026-10-19
+//                  with every core busy: 25 s without a report from the first batch, decode at 3 to 6 tokens/s) a batch takes long, and the budget below ends the wait anyway
+//   stallMs      once the first word came, silence this long (a model that is writing sends a piece every few hundredths of a second)
+//   totalMs      one attempt; cut to what is left of the turn's budget
+//   thinkingPieces  this many pieces of the model's thinking with no reply: it would spend its whole allowance thinking; stop it and say so
+// A timeout is never retried (it would only repeat the wait); a refusal or an empty reply is, once.
+export const LOCAL_TURN_BUDGET_MS = 80_000;
+// The turn's clock may be pushed past that budget by the time the model needed to load (the idle stop unloads it): the model is then given this long to be asked, but the turn
+// ends at LOCAL_TURN_HARD_CAP_MS at the latest, which still leaves the game a moment for its explanation before its own 90 s. A load that is not done LOCAL_ATTEMPT_ROOM_MS before
+// that cap is not waited for in the turn's name: it goes on, and the turn ends with its own "still loading" words.
+export const LOCAL_TURN_HARD_CAP_MS = 86_000;
+export const LOCAL_TURN_STRETCH_MS = LOCAL_TURN_HARD_CAP_MS - LOCAL_TURN_BUDGET_MS;   // how far past its budget a turn may go (the route's own budget is what it is counted from)
+export const LOCAL_ATTEMPT_ROOM_MS = 15_000;
+export const LOCAL_CHAT_LIMITS = Object.freeze({retries: 1, backoffMs: [400], firstByteMs: 60_000, promptStallMs: 60_000, stallMs: 25_000, totalMs: 75_000, thinkingPieces: 160});
+// Strings that end a reply on a server of ours whatever the model is (a fine-tune whose end-of-turn token the server does not know would run on to the
+// token limit): the end-of-turn and start-of-turn markers of the families the packs use (Gemma 4, Gemma 3, Qwen). Never part of a character's words.
+export const LOCAL_STOP_STRINGS = Object.freeze(['<turn|>', '<|turn>', '<end_of_turn>', '<start_of_turn>', '<|im_end|>', '<|im_start|>']);
+
+// What a character says when the service did not answer in time (twice) or a server fault ended the reply, so the player gets a
+// short in-character line instead of a long silence and an error. Never recorded in the character's memory.
+export const HOLDING_LINES = Object.freeze([
+  'Hang on, V. I lost my train of thought there. Say that again?',
+  'Sorry, V. I spaced out for a second. What was that?',
+  'Hold on. I lost you for a moment there. Say it again?',
+]);
+
+// The custom provider is an endpoint nobody here has measured: a cloud model may queue for several seconds (OpenRouter's free models), and a server
+// on the player's own computer may be loading its model on the first turn. So the waits are longer than Mistral's, and a slow answer is an error
+// the player is told about (custom-unreachable, or gemini-server and gemini-unreachable for Google Gemini), never an in-character holding line that would hide a wrong address for ever.
+export const CUSTOM_CLOUD_LIMITS = Object.freeze({firstByteMs: 20000, retryFirstByteMs: 25000, stallMs: 15000, totalMs: 70000, retries: 1, backoffMs: [300]});
+export const CUSTOM_SERVER_LIMITS = Object.freeze({firstByteMs: 90_000, retryFirstByteMs: 90_000, stallMs: 0, totalMs: 120_000, retries: 1, backoffMs: [400]});
+
+const LOCAL_UNAVAILABLE =/\[local:unavailable\]/;
+/** Is this error "the local AI cannot be used" (not installed, not enough graphics memory, would not start)? */
+export const isLocalUnavailable = error => LOCAL_UNAVAILABLE.test(typeof error?.message === 'string' ? error.message : '');
+/** Failures of the local model server the next turn may start again (localRoute); not 'not-installed' or 'mature-off', which the install and the Mature setting cure. */
+export const LOCAL_RETRY_REASONS = Object.freeze(new Set(['low-memory', 'start-failed', 'crashed']));
+export const LOCAL_RETRY_MS = 10_000;
+
+// ---- Routes ------------------------------------------------------------------------------------------------------------------
+
+/**
+ * Mistral: the player's own key, the models in preference order (a model with a request allowance of 0 is skipped for ten
+ * minutes), requests paced about a second apart (the free plan), and a stable `prompt_cache_key` per character so the long persona
+ * prefix is cached on Mistral's side (measured: 98% of the prompt cached, about 20% faster, cached tokens do not count against the
+ * token budget; docs/FREE_CLOUD_OPTION_RESEARCH.md).
+ */
+export function mistralRoute({provider, model = () => DEFAULT_MODELS, decisionModel, chat = streamChat, endpoint, gapMs = 1100, onFailure, onSuccess,
+  cacheScope = '', now = () => performance.now(), scheduler, priorities = {TEXT: 0, BACKGROUND: 2}, chatDefaults = CLOUD_CHAT_LIMITS, limits, log = () => {}, onImagesRejected} = {}) {
+  // Models that refused a picture this session (a model of VISION_MODELS that Mistral says takes none): no picture goes to them again.
+  const refusedPictures = new Set();
+  // A prompt Mistral refuses as too long, with the limit it names, is cut to it once and sent again; the limit is remembered (bridge/prompt-fit.mjs).
+  chat = learnedLimitChat(chat, {limits: limits ?? new LearnedLimits(), log});
+  return {name: 'mistral', provider: 'mistral', chat, endpoint, gapMs, now, blocked: new Map(), nextSlot: 0, scheduler, priorities,
+    chatDefaults,
+    noteHeaders: scheduler ? headers => { try { scheduler.noteHeaders(headers); } catch { /* spacing is best effort */ } } : undefined,
+    models: () => [model()].flat().map(id => ({id})),
+    // "Companions can see": a picture goes only to a model known to take one (VISION_MODELS) and not refused since. Every model of DEFAULT_MODELS qualifies, so no model is swapped for a picture.
+    imagesFor: id => VISION_MODELS.has(id) && !refusedPictures.has(id),
+    noteImagesRejected: id => { refusedPictures.add(id); try { onImagesRejected?.('mistral', id); } catch { /* an observer never fails a reply */ } },
+    // The models of the companion-action decision (a one-word answer, bridge/text-actions.mjs); without it the reply's models are used.
+    decisionModels: decisionModel ? () => [decisionModel()].flat().map(id => ({id})) : undefined,
+    async connect() { return {apiKey: provider.apiKey}; },
+    // The cache key must not hold secrets: the install scope is a hash, the rest is the character.
+    cacheBody: profileKey => profileKey ? {prompt_cache_key: `cyberpunk-convai:${cacheScope}:${profileKey}`.slice(0, 120)} : {},
+    jsonBody: () => ({response_format: {type: 'json_object'}}),
+    summarizeAllowed: () => !(provider.limit && provider.limit.kind === 'invalid'),
+    fallsBack: () => false,
+    success() { provider.noteSuccess(); try { onSuccess?.(); } catch { /* an observer never fails a reply */ } },
+    failure(error) {
+      const kind = failureKind(error);
+      provider.noteLimit(kind === 'limit' ? 'rate' : kind === 'key' ? 'invalid' : kind === 'model' ? 'model' : null);
+      try { onFailure?.(error); } catch { /* an observer never fails a reply */ }
+    },
+    label: 'Mistral'};
+}
+
+/**
+ * The custom provider: any OpenAI-compatible chat-completions endpoint the player named (bridge/custom-endpoint.mjs holds the address, the optional key
+ * and the model id). One model, no persona cache key (an unknown server may refuse unknown fields), no pacing: a 429 with a Retry-After is waited out when
+ * it is short and otherwise answered at once, and no request is made until it has passed (the next turns get the notice without waiting). A request field
+ * the server refuses is dropped and remembered (`adaptation`, bridge/mistral-client.mjs). A model that thinks first is asked for no (or little) reasoning where the
+ * provider documents a field for it, and a reply it spent on thinking is asked again with more room (bridge/reasoning.mjs). A daily limit (OpenRouter's free models) is
+ * not retried and says so. The Mature layer follows MATURE_PROVIDERS (the Custom provider has it, #matureLevel).
+ *   custom      the CustomEndpoint (address, key, model id)
+ *   name        'custom', or 'gemini' for the Google Gemini provider (bridge/gemini-provider.mjs): the same client and the same handling of failures, but its own route name, so the Mature
+ *               layer (MATURE_PROVIDERS has no 'gemini': a cloud provider never gets it) and the settings page tell the two apart
+ */
+export function customRoute({provider, custom, name = 'custom', chat = streamChat, now = () => Date.now(), onFailure, onSuccess, limits, log = () => {}, onImagesRejected, hedgeMs = HEDGE_AFTER_MS, busyBackoffMs = BUSY_BACKOFF_MS, hedgeModel = null} = {}) {
+  // A prompt the endpoint refuses as too long (a Groq plan of 8,000 tokens a minute, an 8k context) is cut to the limit it names, sent again once, and the limit is remembered for this model.
+  chat = learnedLimitChat(chat, {limits: limits ?? new LearnedLimits(), log});
+  // Google Gemini only: a streamed reply with no first word after 4 s is sent once more and the first to answer wins, and a busy answer from Google is asked again after 1 s and 2 s
+  // (bridge/hedged-request.mjs, which shares one extra request between the two). No other provider hedges. `hedgeModel`: the model the extra request asks for (the first one asks the saved model).
+  if (name === 'gemini') chat = hedged(chat, {afterMs: hedgeMs, backoffMs: busyBackoffMs, altModel: hedgeModel, log: line => log(`[TextProvider] ${line}`)});
+  const adaptations = new Map();
+  const adaptation = () => {
+    const key = `${custom.origin}|${custom.model}`;
+    if (!adaptations.has(key)) adaptations.set(key, newAdaptation());
+    return adaptations.get(key);
+  };
+  // A Retry-After pause belongs to the address, model and key it was given for: a new key (another account) or model is asked at once.
+  let pausedUntil = 0, pausedScope = null;
+  const scope = () => `${custom.origin}|${custom.model}|${custom.key ?? ''}`;
+  return {name, provider: 'custom', chat, gapMs: 0, blocked: new Map(), nextSlot: 0, holdingLines: false,
+    // A server on this computer or the home network answers one request at a time: the action decision does not overlap the reply.
+    get parallel() { return !custom.local; },
+    get chatDefaults() { return custom.local ? CUSTOM_SERVER_LIMITS : CUSTOM_CLOUD_LIMITS; },
+    models: () => [{id: custom.model ?? 'custom'}],
+    adaptation,
+    // "Companions can see": an OpenAI-style picture goes to the endpoint until it refuses one (a 400 that names images), then never again this session for this address and model.
+    imagesFor: (_id, lease) => lease?.adapt?.noImages !== true,
+    visionAllowed: () => adaptation().noImages !== true,
+    noteImagesRejected: (_id, lease) => { const adapt = lease?.adapt ?? adaptation(); adapt.noImages = true; try { onImagesRejected?.('custom', custom.model ?? null); } catch { /* an observer never fails a reply */ } },
+    async connect() {
+      if (!custom.ready) throw new MistralError('request', 'is not set up', {provider: 'custom'});
+      const wait = pausedScope === scope() ? pausedUntil - now() : 0;
+      // The server asked to be left alone for a while: no request goes out before that (Retry-After), and the notice comes at once.
+      if (wait > 0) throw new MistralError('limit', 'asked for a pause between requests', {provider: 'custom', retryAfterMs: wait});
+      return {apiKey: custom.key ?? undefined, endpoint: custom.chatUrl, requestModel: custom.model, trustedOrigin: custom.origin,
+        headers: custom.extraHeaders, adapt: adaptation(), reasoning: custom.reasoning, noThinking: custom.noThinking};
+    },
+    // A cloud endpoint is asked for the usage of the prompt in the closing chunk (OpenAI-style `stream_options`), so the log can say how much of it the provider's prefix cache answered
+    // (promptUsage). An endpoint that refuses the field has it dropped and is asked again, as for every optional field (DROPPABLE in bridge/mistral-client.mjs). A server on this computer is left alone.
+    cacheBody: () => custom.local ? {} : {stream_options: {include_usage: true}},
+    // The endpoint and model asked now: the prompt profile of a Custom endpoint is chosen by them (bridge/prompt-profiles.mjs customProfileId).
+    describe: () => ({origin: custom.origin, model: custom.model}),
+    jsonBody: () => ({response_format: {type: 'json_object'}}),
+    summarizeAllowed: () => !(provider.limit && (provider.limit.kind === 'invalid' || provider.limit.kind === 'credits' || provider.limit.kind === 'daily' || provider.limit.kind === 'region')),
+    fallsBack: () => false,
+    success() { pausedUntil = 0; provider.noteSuccess(); try { onSuccess?.(); } catch { /* an observer never fails a reply */ } },
+    failure(error) {
+      // Google Gemini's failures name their own notice (gemini-key, gemini-daily, ...) instead of the Custom provider's (bridge/mistral-client.mjs tagGemini).
+      if (name === 'gemini') tagGemini(error);
+      const kind = failureKind(error);
+      if (kind === 'limit' && error.retryAfterMs > 0) { const here = scope(); pausedUntil = Math.max(pausedScope === here ? pausedUntil : 0, now() + error.retryAfterMs); pausedScope = here; }
+      provider.noteLimit(kind === 'limit' ? 'rate' : kind === 'daily' ? 'daily' : kind === 'key' ? 'invalid' : kind === 'model' ? 'model' : kind === 'credits' ? 'credits' : kind === 'region' ? 'region' : null);
+      try { onFailure?.(error); } catch { /* an observer never fails a reply */ }
+    },
+    label: name === 'gemini' ? 'Google Gemini' : 'The custom provider'};
+}
+
+const seconds = ms => (Number.isFinite(ms) ? (ms / 1000).toFixed(1) : '?') + ' s';
+/**
+ * The log line of a turn that gave up waiting for the local model ("is still loading the model", error report d8c0d2f9: the report's own log was the next session's, so the
+ * load that took 80 s was nowhere in it): how long this turn waited, the state of the server, how long the load has run and what it is waiting on. Numbers and fixed phrases only.
+ * Never throws; a server without loadProgress() gives the waited time alone.
+ */
+export function loadingLine(server, waitedMs) {
+  const head = `The local AI is still loading the model: this turn waited ${seconds(waitedMs)} for it`;
+  try {
+    const progress = server?.loadProgress?.();
+    if (!progress) return head;
+    const parts = [`server state ${progress.state ?? 'unknown'}`];
+    if (progress.loadMs !== null && progress.loadMs !== undefined) parts.push(`this start has run ${seconds(progress.loadMs)}`);
+    else parts.push('no start is under way' + (progress.idleStopped ? ' (the model was stopped, for instance after the idle time, and no start has begun)' : ''));
+    if (progress.waitingOn) parts.push(`waiting on: ${progress.waitingOn} for ${seconds(progress.waitingMs)}`);
+    if (progress.stepping) parts.push('a model change (step-down or reload) is in progress');
+    return `${head}; ${parts.join('; ')}`;
+  } catch { return head; }
+}
+
+/**
+ * The fully local AI: the supervised llama-server (bridge/local-llm-server.mjs), or a server the player runs themselves (an `endpoint` entry of
+ * the custom manifest; the supervisor then hands out its address, key and model id instead). No pacing, no key of the player's: the
+ * supervisor's per-session key on a loopback port. Starting the server is part of `connect` (it waits for the model to load on the
+ * first turn after an idle unload). Background work (summaries, facts) never starts the server: it runs only while it is loaded.
+ */
+export function localRoute({server, chat = streamChat, provider, onFailure, log = () => {}, now = () => Date.now(), onImagesRejected} = {}) {
+  // A Local AI that failed for a reason the next start may not meet again (not enough free graphics memory, a start that failed, a crash) is started again by
+  // the next turn that needs it, at most once every LOCAL_RETRY_MS, so a later turn recovers without the player touching Settings. Not 'not-installed' and
+  // not 'mature-off': the install and the Mature setting have their own polls. No timer: it runs only when a turn comes. Turns are never handed to another provider.
+  // A start this route's own turn just made and lost counts as the last try too (one turn never starts the model twice).
+  let lastRetry = -Infinity, picturesSkipLogged = false;
+  const retryFailed = () => {
+    try {
+      const status = server.status?.();
+      if (status?.state !== 'failed' || !LOCAL_RETRY_REASONS.has(status.reason)) return;
+      const at = now();
+      if (at - lastRetry < LOCAL_RETRY_MS) return;
+      lastRetry = at;
+      log('The local AI failed earlier (' + status.reason + '); this turn starts it again');
+      server.reset?.();
+    } catch { /* a retry is best effort */ }
+  };
+  // Every request is fitted to the context the server really has (bridge/prompt-budget.mjs): n_ctx is read from the server, the prompt is
+  // cut in a fixed order of priority when it does not fit, and a refusal that still comes (an estimate that was low) is learned from.
+  const meters = new Map();
+  let lastModel = null;
+  let lastMeter = null;   // the meter of the model that answered last: the compact character text (and its warm-up) counts its target with the same ratio the soft target does
+  const mismatches = new Map();   // a gap between the budget's count and the server's is written to the log a few times per meter, not every turn
+  // How fast this machine reads a prompt, per load of the model (a reload may have less graphics memory to work with): a slow one is given a
+  // smaller prompt than the context allows (PrefillMeter in bridge/prompt-budget.mjs).
+  const speeds = new Map();
+  let lastSpeed = null;
+  // The character text a slow machine is given (bridge/compact-persona.mjs): compact once the machine is measured to read slowly, chosen when a character's first turn comes.
+  const compacts = new CompactChoice({log});
+  // The meter of the model load a handle belongs to. A model loaded again starts from the compact state the load before learned.
+  const speedOf = handle => {
+    const speedKey = `${handle.model}|${handle.loadedAt ?? 0}`;
+    // A model with so few layers on the card that the CPU does the work (the 'local-cpu' notice) starts with the compact character text: its first turn would read the whole
+    // text at a rate the machine is known to have (36 to 220 tokens a second), 2,000 tokens more than it needs, and run out of the turn's time (2026-10-21 report).
+    // A model that follows another one on this computer (a step down to a smaller model when the card is too small beside the game, a changed choice) starts from the reading the load before had
+    // while it is recent and slow, and from the compact text when that reading is below the compact threshold: it is the same card with the same game on it (2026-10-22 report: Bonsai after Qwen
+    // on the CPU read 8,821 tokens whole, at about 100 tokens a second, and ran out of the 75 s). A model that reads fast again is measured fast within two turns.
+    if (!speeds.has(speedKey)) {
+      const before = lastSpeed, carry = before?.carry?.() ?? null;
+      speeds.clear();
+      speeds.set(speedKey, new PrefillMeter({offload: handle.offload === true, carry, compact: before?.compact === true || handle.cpuBound === true || (carry !== null && carry.rate < PREFILL.compactBelow)}));
+    }
+    const meter = speeds.get(speedKey);
+    meter.touch?.();
+    return meter;
+  };
+  // What a server the player runs has refused or shown about itself (bridge/mistral-client.mjs newAdaptation: a field it refuses, that it thinks and is asked for no
+  // thinking from then on), per address and model id, for the session. In memory: the player may change the model behind the same address.
+  const adaptations = new Map();
+  const adaptation = connection => {
+    const key = `${connection.trustedOrigin}|${connection.requestModel ?? ''}`;
+    // `thinks: true` from the start: a server the player runs (LM Studio, Ollama, KoboldCpp) gets the fields that ask for no thinking on its FIRST request, not after a reply of only thinking
+    // (one wasted turn); one that refuses a field by name loses just that field and the request is sent again at once (bridge/mistral-client.mjs learnRefusal).
+    if (!adaptations.has(key)) adaptations.set(key, {...newAdaptation(), thinks: true});
+    return adaptations.get(key);
+  };
+  chat = budgetedChat(survivingLoss(chat, {server, log}), {
+    budget: async options => {
+      const handle = await server.ensure({signal: options?.signal});
+      if (!(handle?.contextSize > 0)) return null;
+      if (!meters.has(handle.model)) meters.set(handle.model, new TokenMeter({charsPerToken: seedRatio(handle.model)}));
+      lastMeter = meters.get(handle.model);
+      lastModel = handle.model;
+      lastSpeed = speedOf(handle);
+      const count = typeof server.tokenize !== 'function' ? undefined : async messages => {
+        const tokens = await server.tokenize(messages.map(message => message.content).join('\n'), {signal: options?.signal});
+        return tokens === null ? null : tokens + templateTokens(messages.length);
+      };
+      // server: a model server the player runs. Its loaded context can be smaller than what it reported, so a refusal for length teaches the real one (learnContext).
+      // A turn with a picture keeps room in the prompt for it (the image tokens), and its prompt count is not used to teach the token ratio or the reading speed: the picture's tokens are
+      // not text, and the image encoder's time is not the prompt's (bridge/prompt-budget.mjs, imageTokens).
+      const pictures = Array.isArray(options?.images) ? options.images.length : 0;
+      return {contextTokens: handle.contextSize, meter: meters.get(handle.model), speed: lastSpeed, count, server: handle.external === true,
+        ...(pictures ? {reserveTokens: BUDGET.reserveTokens + imageReserveTokens(pictures), imageTokens: imageReserveTokens(pictures)} : {})};
+    },
+    learn: tokens => { try { server.learnContext?.(tokens); } catch { /* a note of the context never fails a request */ } },
+    // A refusal for length that was learned (a server the player runs that has a smaller context than it said): one line with what was cut and whether the second try went through.
+    onLearned: (info, options) => log(promptFitLine({provider: 'local', model: lastModel}, info)),
+    // The compact character text of a machine measured to read slowly (bridge/compact-persona.mjs); a fast machine is given the very arguments it was built from.
+    shape: (args, options, base) => {
+      let persona = args.persona;
+      try { persona = compacts.personaFor(args.persona, {speed: base?.speed, meter: base?.meter, mature: args.mature ?? null, guard: args.guard ?? false, limits: args.limits, profile: args.profile}); } catch { /* a cut that fails leaves the whole text */ }
+      return persona === args.persona ? args : {...args, persona};
+    },
+    onFit: fit => {
+      const rate = lastSpeed?.tokensPerSecond;
+      log('The local AI: ' + describeFit(fit) + (fit.target && Number.isFinite(rate) ? ` (this computer reads about ${Math.round(rate)} tokens a second)` : '') + (fit.bias > 1 ? ` (counts corrected by ${fit.bias.toFixed(2)})` : ''));
+    },
+    // The server counted clearly more than the budget did for the prompt that was sent (bridge/prompt-budget.mjs TokenMeter.bias): later prompts are counted with that gap.
+    onMismatch: ({raw, real, gap, exact, bias}) => {
+      const seen = mismatches.get(lastMeter) ?? 0;
+      if (seen >= 3) return;
+      mismatches.set(lastMeter, seen + 1);
+      log(`The local AI: the server counted ${real} tokens for a prompt this computer counted as ${raw} (${exact ? "by the server's tokenizer" : 'by estimate'}, ${gap.toFixed(2)} times); later prompts are counted ${bias.toFixed(2)} times higher`);
+    }});
+  // parallel: false: the server answers one request at a time (one slot), so an action decision does not overlap the reply; measured
+  // 2026-10-13: the overlap gained nothing on Gemma 4 with one slot or two (docs/LOCAL_AI.md, Actions).
+  return {name: 'local', provider: 'local', chat, gapMs: 0, blocked: new Map(), nextSlot: 0, parallel: false,
+    models: () => [{id: 'local'}],
+    // "Companions can see": a picture goes only to a server of ours that was started with a vision projector, and never on a machine measured to read prompts slowly or to run the model
+    // mostly on the processor: the picture's encoding and tokens would add to a wait the player already feels (docs/COMPANION_VISION.md, "Local AI").
+    imagesFor: (_id, lease) => {
+      if (lease?.vision !== true) return false;
+      let slow = lastSpeed?.slow === true;
+      try { slow = slow || server.placement?.()?.cpuBound === true; } catch { /* the placement is best effort */ }
+      if (slow && !picturesSkipLogged) { picturesSkipLogged = true; log('[Vision] pictures are not sent to Local AI on this computer: it reads prompts slowly, and a picture would add to the wait'); }
+      return !slow;
+    },
+    noteImagesRejected: () => { try { onImagesRejected?.('local', null); } catch { /* an observer never fails a reply */ } },
+    // waitMs: the most this turn can still wait (its budget, LOCAL_TURN_BUDGET_MS). A model that is still loading then (a first start compiles shaders for a
+    // minute or two; a reload after a changed choice) ends the turn with its own explanation instead of the game's silent timeout; the load itself goes on, so
+    // the next turn finds the model ready. No other provider ever answers that turn.
+    // `prepared`: a line written ahead of the moment it is heard (Johnny's follow-on, an after-scene line; docs/COMPANION_SPEAK_UP.md). It is the lowest-priority work
+    // there is: it never loads the model, never starts while anything else holds the slot (a turn, a warm-up, a summary), is stopped the moment a real turn needs
+    // the model (the same stop as a summary's) and does not wait for the model's 10 s of quiet after a turn, which is exactly when it is wanted.
+    async connect(signal, {background = false, prepared = false, waitMs, profileKey, persona = null} = {}) {
+      if (background && server.status().state !== 'ready') throw new MistralError('network', 'is not loaded right now', {provider: 'local'});
+      if (prepared && server.status().state !== 'ready') throw new MistralError('network', 'is not loaded right now', {provider: 'local', reason: 'busy', noRetry: true});
+      if (!background && !prepared) retryFailed();
+      // The server has one slot: a warm-up of another character's persona that is still being read must not stand in this request's way, and neither
+      // may a summary or memory work (nobody waits for those). (A warm-up of this character's own persona is the prefix this request needs, so it is waited for.)
+      let stopped = false;
+      if (!background && !prepared) { try { stopped = server.preempt?.(typeof profileKey === 'string' ? profileKey : null) === true; } catch { /* the warm-up is best effort */ } }
+      let connection;
+      const bounded = Number.isFinite(waitMs) ? AbortSignal.timeout(Math.max(0, Math.ceil(waitMs))) : null;   // a whole number of milliseconds, or it throws
+      try { connection = await server.ensure({signal: bounded ? (signal ? AbortSignal.any([signal, bounded]) : bounded) : signal, background}); }
+      catch (error) {
+        lastRetry = now();
+        if (bounded?.aborted && !signal?.aborted && error?.name === 'TimeoutError') {
+          // The report of a turn that gave up on the load shows only the next session's log, so the cause is written here: how long this turn waited, how long the load has run and what it is waiting on.
+          log(loadingLine(server, waitMs));
+          throw new MistralError('network', 'is still loading the model', {provider: 'local', slow: true, reason: 'loading', noRetry: true, trace: {...newTrace(), elapsedMs: Math.round(waitMs)}});
+        }
+        throw error;
+      }
+      // Work nobody waits on starts only when the slot is free of turns and of other such work, and a turn that comes while it runs stops it (preempt).
+      // The check and the registration below are one step, so a turn cannot slip between them.
+      let stopper = null;
+      if ((background || prepared) && !connection.external) {
+        const why = (prepared ? server.preparedRefusal?.() : server.backgroundRefusal?.()) ?? null;
+        if (why) throw new MistralError('network', `is busy (${why})`, {provider: 'local', reason: 'busy', noRetry: true});
+        if (typeof server.begin === 'function') stopper = new AbortController();
+      }
+      // Requests of ours already on the server when this one is sent: what it may have to wait behind (the record of the turn says so).
+      const behind = Number.isFinite(server.inflight) ? server.inflight : 0;
+      // The persona this request puts into the slot (null for an action decision, which replaces it with a short prompt): a warm-up of that persona is then skipped.
+      if (!background) { try { server.noteSlot?.(typeof persona === 'string' ? persona : null); } catch { /* the warm-up is best effort */ } }
+      // A request in flight keeps the server loaded; releasing it re-arms the idle timer. A prepared line is background work that still runs the server at
+      // normal priority (`raise`): it is written while a line plays and must be ready when that line ends.
+      const done = typeof server.begin === 'function' ? server.begin({background: background || prepared, raise: prepared, cancel: stopper ? () => stopper.abort() : null}) : null;
+      // A server the player runs: what it has refused, and the fields that ask for no thinking, sent from its first request (the adaptation above starts with `thinks`). Our own llama-server never thinks and has neither.
+      let hostname = ''; try { hostname = new URL(connection.endpoint).hostname; } catch { /* no address: nothing to ask */ }
+      const own = connection.external === true ? {adapt: adaptation(connection), noThinking: noThinkingFields({hostname, local: true})} : {};
+      return {apiKey: connection.apiKey, endpoint: connection.endpoint, model: connection.model, requestModel: connection.requestModel, trustedOrigin: connection.trustedOrigin, external: connection.external === true,
+        vision: connection.vision === true,
+        ...own, ...(stopper ? {signal: stopper.signal} : {}), queue: {behind, ...(stopped ? {stopped: true} : {})},
+        release: () => { try { if (done) done(); else server.touch?.(); } catch { /* the idle timer is best effort */ } }};
+    },
+    // The closing chunk of a reply carries the server's own count of the prompt, which the token meter learns from.
+    cacheBody: () => ({stream_options: {include_usage: true}}),
+    // A response arrived (the request is answered): the supervisor stops waiting for it (its spill look at the first turn that has had no answer for SPILL_LIMITS.noHeadersMs).
+    noteHeaders: () => { try { server.noteHeaders?.(); } catch { /* a look at the memory counters is best effort */ } },
+    // Only our own llama-server gets the fields below (a server the player runs may refuse a field it does not know): llama-server reports how far it has
+    // read the prompt (`return_progress`, so a slow prompt is not mistaken for a hung server and a stuck one is named), stops a reply at the end-of-turn
+    // strings whatever the model is, and is told again, per request, not to think (the same as its `--reasoning off`, for a template that ignores that).
+    leaseBody: lease => (lease?.external ? {} : {return_progress: true, stop: [...LOCAL_STOP_STRINGS], chat_template_kwargs: {enable_thinking: false}}),
+    chatDefaults: LOCAL_CHAT_LIMITS,
+    turnBudgetMs: LOCAL_TURN_BUDGET_MS,
+    // What is loaded and how the turns went (bridge/local-llm-server.mjs diagnostics), for the log line of a turn that failed and for the support report.
+    diagnostics: () => { try { return server.diagnostics?.() ?? null; } catch { return null; } },
+    noteTurn: info => { try { return server.noteTurn?.(info) ?? {first: false}; } catch { return {first: false}; } },
+    // One more stall steps the model down (or a step is under way): a repeated line is then not worth a second request (LocalLlmServer.stepDownNear).
+    stepDownNear: () => { try { return server.stepDownNear?.() === true; } catch { return false; } },
+    jsonBody: () => ({response_format: {type: 'json_schema', json_schema: {name: 'facts', strict: true, schema: FACT_SCHEMA}}}),
+    summarizeAllowed: () => true,
+    // A failed local turn (a refused prompt, no answer, a server that went away, a start that failed) is never handed to another provider (owner rule 2026-10-21):
+    // it fails and the game says so (local-failed, local-unavailable, local-no-memory); the next turn tries Local AI again.
+    fallsBack: () => false,
+    success() { /* nothing to clear */ },
+    failure(error) {
+      // A line prepared ahead that found the slot busy never ran; nothing about the server failed.
+      if (error?.reason === 'busy' && error?.provider === 'local') return;
+      // 'stopped': the start this turn waited for was ended on purpose (a step-down, a reload, the player's own change). That is not a failure of Local AI, and marking
+      // it one left Local on the cloud provider for the rest of the session (RETRY_ON_CHOICE does not list it; 2026-10-21 reports).
+      if (isLocalUnavailable(error)) { if (error.reason !== 'stopped') provider?.noteLocalFailure?.(error.reason ?? 'start-failed'); }
+      // A server the player runs that did not answer (stopped, moved, asleep) is looked at again before the next turn: one short request, no polling.
+      else if (failureKind(error) === 'network') { try { server.externalLost?.(); } catch { /* best effort */ } }
+      // A refused key on a server whose first look could not tell (KoboldCpp guards only its chat requests): named once in the log.
+      else if (failureKind(error) === 'key') { try { server.externalKeyRefused?.(); } catch { /* best effort */ } }
+      try { onFailure?.(error); } catch { /* an observer never fails a reply */ }
+    },
+    prewarm: (messages, options) => server.prewarm(messages, options),
+    // The persona a warm-up (and so the prompt cache of the character's first turn) is built from: the one the turn will use (compact on a machine measured to read slowly).
+    // Without a request to the server: the last load's meter is the one a turn will use (a model loaded again starts from its state), and with none there is nothing measured.
+    shapePersona(persona, {mature = null, guard = false, limits, profile} = {}) {
+      try { return compacts.personaFor(persona, {speed: lastSpeed, meter: lastMeter, mature, guard, limits, profile}); } catch { return persona; }   // the warm-up never fails for a cut
+    },
+    // The loaded model's tier ('lite' or 'standard'), which picks the prompt profile (bridge/prompt-profiles.mjs profileIdFor); only while a model is up, like `modelName`.
+    tierName: () => { const status = server.status?.(); return status?.state === 'ready' || status?.state === 'warming' ? status?.tier ?? null : null; },
+    // The loaded model's name, for the Mature content allowance (bridge/mature-content.mjs). Only while a model is up: after an idle stop (or during a reload) the status still names
+    // the previous model, and the next start may load another one, so the level would be read for the wrong model.
+    modelName: () => { const status = server.status?.(); return ['stopped', 'failed', 'starting'].includes(status?.state) ? null : status?.model ?? null; },
+    // The model a start would load, read from the selection: {name, tier, hints} or null. A question about WHICH model (the Mature level, the prompt profile) never starts the server:
+    // the request itself does that, once (2026-10-24: a Mature level read started a server that could not start, a second time in the same turn).
+    plannedModel: () => { try { return server.plannedModel?.() ?? null; } catch { return null; } },
+    // The model is down or on its way up (the idle stop, a reload), so the first request of a turn waits for it; `prepare` starts that load (and waits for it) at the start of the turn.
+    // How long a turn keeps to ask the model once it is up (LOCAL_ATTEMPT_ROOM_MS for a model on the card; longer for one with layers on the CPU: the cold prompt takes the time it takes).
+    attemptRoomMs: () => {
+      try { const placement = server.placement?.(); return coldAttemptRoomMs({baseMs: LOCAL_ATTEMPT_ROOM_MS, offload: placement?.offload === true, cpuBound: placement?.cpuBound === true, speed: lastSpeed}); } catch { return LOCAL_ATTEMPT_ROOM_MS; }
+    },
+    loadPending: () => { try { const state = server.status?.()?.state; return state === 'stopped' || state === 'starting' || state === 'warming'; } catch { return false; } },
+    prepare: async signal => { retryFailed(); try { await server.ensure({signal}); return true; } catch { lastRetry = now(); return false; } },
+    // What the manifest of a model added by hand says about it ({uncensored, family}); the Mature allowance reads it before the name.
+    modelHints: () => server.modelHints ?? null,
+    label: 'The local AI'};
+}
+
+// ---- The record of a local turn ----------------------------------------------------------------------------------------------
+
+/** A turn whose first word took longer than this is logged even when it worked. */
+export const SLOW_FIRST_WORD_MS = 8000;
+
+const part = (label, value, unit = '') => (value === null || value === undefined || Number.isNaN(value) ? null : `${label} ${value}${unit}`);
+
+/**
+ * One log line for a local turn: what it did and which model did it, so a report shows the cause at once.
+ *   a turn that worked   [LocalTurn] ok: first word 346 ms, 50 pieces, 32.5 tokens/s, prompt 322 new + 4579 cached tokens | model ... 
+ *   a turn that failed   [LocalTurn] FAILED: no first word from the model after 60 s (no-first-token): headers 45 ms, first event -, first word -, 0 pieces, ... | model ...
+ * `diagnostics` is the supervisor's (bridge/local-llm-server.mjs); no word of a reply, no path and no key is in it.
+ */
+export function describeLocalTurn({ok, trace, error, detail, first = false, brief = false, diagnostics = null} = {}) {
+  const t = trace ?? error?.trace ?? null;
+  const when = value => (Number.isFinite(value) ? `${value} ms` : '-');
+  // The wait before the request was sent and what was already on the server beside it (the first sign of a growing delay), at the end of every line that has it.
+  const q = t?.queue ?? error?.queue ?? null;
+  const queued = Number.isFinite(q?.waitMs) ? ` | waited ${q.waitMs} ms before sending, ${q.behind > 0 ? `behind ${q.behind} other request${q.behind === 1 ? '' : 's'}` : 'nothing else on the server'}${q.stopped ? ', stopped background work for it' : ''}` : '';
+  // An ordinary turn (not the first since the load, not slow) is logged too, in a short form: its timings and prompt sizes, no model description.
+  const model = brief ? '' : diagnostics?.model ? [`model ${diagnostics.model.file ?? diagnostics.model.name} (${diagnostics.model.family ?? 'unknown family'}${diagnostics.model.offload ? ', part on the CPU' : ''})`,
+    diagnostics.template ? `template ${diagnostics.template.source}${diagnostics.template.chars ? ` ${diagnostics.template.chars} chars sha ${diagnostics.template.sha}` : ''}` : null,
+    part('context', diagnostics.engine?.contextSize), diagnostics.state ? `server ${diagnostics.state}` : null,
+    Number.isFinite(diagnostics.start?.loadMs) ? `loaded in ${(diagnostics.start.loadMs / 1000).toFixed(1)} s` : null].filter(Boolean).join(', ') : 'model unknown';
+  if (ok) {
+    const speed = Number.isFinite(t?.timings?.tokensPerSecond) ? `${Math.round(t.timings.tokensPerSecond * 10) / 10} tokens/s` : null;
+    const prompt = Number.isFinite(t?.timings?.promptTokens) ? `prompt ${t.timings.promptTokens} new + ${t.timings.cachedTokens ?? 0} cached tokens` : null;
+    return `[LocalTurn] ok${first ? ' (first turn since the model was loaded)' : ''}: first word ${when(t?.firstTokenMs)}, ${t?.pieces ?? 0} pieces${[speed, prompt].filter(Boolean).map(x => ', ' + x).join('')}, took ${when(t?.elapsedMs)}${brief ? '' : ` | ${model}`}${queued}`;
+  }
+  const attempts = Array.isArray(error?.failed) && error.failed.length ? `; attempts: ${error.failed.map(item => `${item.reason ?? item.kind} ${item.ms} ms`).join(', ')}` : '';
+  const progress = t?.progress ? `, prompt read ${t.progress.processed} of ${t.progress.total} tokens (${t.progress.cache} cached)` : '';
+  return `[LocalTurn] FAILED: ${detail ?? String(error?.message ?? 'error').slice(0, 160)} (${error?.reason ?? error?.kind ?? 'error'}): headers ${when(t?.headersMs)}, first event ${when(t?.eventMs)}, `
+    + `first word ${when(t?.firstTokenMs)}, ${t?.pieces ?? 0} pieces, ${t?.reasoning ?? 0} thinking pieces${progress}, took ${when(t?.elapsedMs)}${attempts} | ${model}${queued}`;
+}
+
+// ---- Host --------------------------------------------------------------------------------------------------------------------
+
+/**
+ * The request fields of a prompt profile's sampling (bridge/prompt-profiles.mjs): nothing for a field the profile leaves null, so a profile that sets none sends the request it always did. `stop` joins the end-of-turn
+ * strings our own llama-server is always given. A server the player runs that refuses one of these by name loses it and is asked again (bridge/mistral-client.mjs).
+ * The player's advanced parameters (`extra`, bridge/sampler-extras.mjs) come first, so a box of the form always wins; Mistral's API takes neither them nor Top K and Min P (`provider`), only the two penalties.
+ */
+export function samplingBody(sampling, lease, provider = null) {
+  const body = provider === 'mistral' ? {} : extraFields(sampling.extra);
+  if (Number.isFinite(sampling.topP)) body.top_p = sampling.topP;
+  if (provider !== 'mistral' && Number.isFinite(sampling.topK)) body.top_k = sampling.topK;
+  if (provider !== 'mistral' && Number.isFinite(sampling.minP)) body.min_p = sampling.minP;
+  // Mistral's API refuses a repeat penalty ("extra_forbidden", report 625256e9): it takes only the presence and frequency penalties.
+  if (provider !== 'mistral' && Number.isFinite(sampling.repeatPenalty)) body.repeat_penalty = sampling.repeatPenalty;
+  if (Number.isFinite(sampling.presencePenalty)) body.presence_penalty = sampling.presencePenalty;
+  if (Number.isFinite(sampling.frequencyPenalty)) body.frequency_penalty = sampling.frequencyPenalty;
+  if (sampling.stop?.length) body.stop = lease?.external === false ? [...LOCAL_STOP_STRINGS, ...sampling.stop] : [...sampling.stop];
+  return body;
+}
+
+// An ordinary NPC that serves V (vendors, ripperdocs, bartenders, dealers): "Anything else?" is its own question and is not cut as a stock closing question (stripStockTail).
+const SERVICE_PROFILE = /^(?:npc-(?:ripperdoc|weapons-dealer|bartender|junk-dealer|market-stall|[a-z-]*vendor)-|viktor-vektor$|claire-russell$|robert-wilson$|misty-olszewski$|wakako-okada$)/;
+const QUOTED_START = /^(?:\s*\{[^{}\n]{1,24}\})*\s*["“”'‘]/;
+
+export class TextProviderHost {
+  /**
+   * provider    the provider state (bridge/mistral-key.mjs): `route` names the route in use, `active` whether one is
+   * routes      {mistral, local}: route objects as above
+   * memory      MistralMemory or MemoryStore (bridge/memory-store.mjs; adds retrieval and fact extraction)
+   * personas    PersonaBook
+   * transformReply   the bridge's cleanReply (Natural speech, Expressive emotions)
+   * gate        () => boolean: may background work (summaries, facts) run now? (the bridge: no combat, nothing speaking)
+   * resolveProfile   config => profile key, for warm connections that carry no `local` field
+   * idleRetryMs   how often a gated background task checks the gate again
+   * deliverAction  message => Promise<boolean>: hands a companion action the reply asked for to the game (CompanionActions.deliver);
+   *                without it the turn offers no actions (bridge/text-actions.mjs)
+   * traceReaction  (offerToken, {tag, why}) => void: what the reply's tag was for an ordinary NPC's reaction offer (CompanionActions.traceReaction),
+   *                which writes the turn's one log line; without it the host writes that line itself
+   * matureContent  the Mature setting (bridge/mature-content.mjs); the hard-limit guard runs for a turn on the local AI or Custom when it is on, and
+   *                for the local AI also when the loaded model is an uncensored one (the guard follows the model that answers, not only the setting)
+   * guardOnly      true for an add-on's host: the guard (input screen, output screen, adults-only and hard-limit lines) but never the crude Mature persona layer
+   * spokenLines  (profileKey) => the speaker's own recent lines (an add-on's journal, remarks included): a conversation reply that says one
+   *                again is held back from the voice while it matches and is written once more when it is one
+   * memoryKeyFor  (profileKey) => the key the character's memory is kept under now (bridge/memory-scope.mjs): the profile key, or `<profile key>@<pack id>` while a content pack with
+   *                a separate memory is on. Taken once when a turn starts and used to its end (the exchange it records, the summary that follows), so a switch in the middle of a turn
+   *                never moves it into the other memory. Without it the profile key is the memory key, as before.
+   * stripPlayerEcho  true for an add-on's host: a conversation reply that opens by saying V's own line again (or writes V's side of the talk as a
+   *                script) loses those words, in the text the voice is given as it streams and in the finished reply (stripPlayerEcho in mistral-prompt.mjs)
+   */
+  constructor({provider, memory, personas = new PersonaBook(), routes = {}, transformReply = result => result, now = () => performance.now(),
+    log = () => {}, limits = LIMITS, gate, resolveProfile, idleRetryMs = 10_000, deliverAction, traceReaction, matureContent = null, matureGuard = new MatureGuard(), guardOnly = false, stripPlayerEcho: echoCut = false, spokenLines = null, promptProfiles = null, memoryKeyFor = null, replyLength = () => 'natural'} = {}) {
+    if (!provider) throw Error('Text provider required');
+    Object.assign(this, {provider, memory, personas, routes, transformReply, now, log, limits, gate, resolveProfile, idleRetryMs, deliverAction, traceReaction, matureContent, matureGuard, guardOnly, echoCut, spokenLines, promptProfiles, memoryKeyFor, replyLength});
+    this.recent = new RecentLines();        // the last lines each character said out loud, speak-ups included (memory only, bridge/recent-lines.mjs)
+    this.profileIds = new WeakMap();        // a resolved prompt profile -> its id (local-lite, ...)
+    this.summaries = new Set();
+    this.stoppable = new Set();   // the controllers of background requests that give way to a turn (a local summary)
+    this.matureLogged = new Set();
+    this.profilesLogged = new Set();
+    this.holdingTurns = 0;
+    this.timers = new Set();
+    this.closed = false;
+    // Facts are extracted by the memory store when it is idle; it calls back here for the model request.
+    // Only while a text provider answers: on Convai (its own long-term memory) nothing is scheduled; a provider switch re-plans.
+    this.memory?.setExtractor?.(task => this.#extract(task), () => this.provider.active === true);
+    try { this.unwatchProvider = this.provider.onChange?.(() => this.memory?.refresh?.()); } catch { /* an observer never breaks the host */ }
+  }
+
+  // The free plan allows about one request a second. Every request takes the next free start slot, so two requests (a reply and
+  // the summary of older talk, or two companions in a group round) never start closer together than `gapMs`.
+  // A route may bring the account's scheduler (`route.scheduler`, bridge/mistral-rate.mjs): it spaces the starts of every request on the
+  // same Mistral key (text and speech), serves a reply before background work and retries a 429 after its retry-after. `#request` is the
+  // only place a Mistral text request is sent, so this is the only place it is paced.
+  async #slot(route, signal) {
+    if (route.scheduler || !route.gapMs) return;
+    const now = route.now ? route.now() : this.now();
+    const start = Math.max(now, route.nextSlot);
+    route.nextSlot = start + route.gapMs;
+    if (start > now) await pause(start - now, signal);
+  }
+
+  #request(route, messages, signal, extra = {}) {
+    const {priority, ...options} = extra;
+    if (!route.scheduler) return this.#slot(route, signal).then(() => this.#send(route, messages, signal, options));
+    return route.scheduler.schedule(() => this.#send(route, messages, signal, options),
+      {priority: priority === 'background' ? route.priorities.BACKGROUND : route.priorities.TEXT, signal, retries: 1, label: 'text'});
+  }
+
+  async #send(route, messages, signal, extra = {}) {
+    // slotKey: whose persona a local server has just been warmed with, for a request that has no `profileKey` of its own (the action decision, which must
+    // not carry the persona's cache key to the cloud): it only tells the local route which warm-up not to stop.
+    const {profileKey, slotKey, background, prepared, extraBody, models, sampling, images, hardTokenCap, ...rest} = extra;
+    const began = this.now();
+    const lease = await route.connect(signal, {background, prepared: prepared === true, profileKey: profileKey ?? slotKey, persona: profileKey ?? null, ...(extra.deadlineAt !== undefined ? {waitMs: extra.deadlineAt - this.now()} : {})});
+    // How long this request waited before it was sent (starting or waiting for the model, giving way to others) and what was in flight beside it: left on the
+    // request's trace (and on its error) so the turn's log line and the support report show a growing wait as it happens (docs/LOCAL_AI.md, "Turn record").
+    const queue = lease.queue ? {waitMs: Math.max(0, Math.round(this.now() - began)), ...lease.queue} : null;
+    const noted = target => { if (queue && target && typeof target === 'object') { try { target.queue = queue; } catch { /* a frozen object keeps no note */ } } return target; };
+    // A background request also stops when a turn needs the model (the lease's own signal).
+    const sent = lease.signal ? (signal ? AbortSignal.any([signal, lease.signal]) : lease.signal) : signal;
+    try {
+      // The models in order of preference. A model the account has no allowance for (limit 0) is skipped for ten minutes.
+      const wanted = models?.length ? models : route.models();
+      // The sampling fields of this turn's reply, built once; a server the player runs that refuses one by name loses it (bridge/mistral-client.mjs, `askedKeys`).
+      const sampled = sampling ? samplingBody(sampling, lease, route.provider) : {};
+      const askedKeys = Object.keys(sampled).filter(name => name !== 'stop');
+      const now = Date.now();
+      const usable = wanted.filter(item => !(route.blocked.get(item.id) > now));
+      let lastError;
+      for (const item of usable.length ? usable : wanted.slice(0, 1)) {
+        try {
+          // `lease.requestModel`: the model id a server the player runs is asked for (the local and custom routes); `lease.trustedOrigin`: the one origin
+          // that server's key may go to (bridge/mistral-client.mjs); `lease.headers`, `lease.adapt` and `lease.reasoning` (custom only): OpenRouter's two optional headers,
+          // what the server has refused so far, and the field that asks a reasoning model to think less. None of them exists for the Mistral route.
+          const body = {...route.cacheBody(profileKey), ...(route.leaseBody?.(lease) ?? {}), ...sampled, ...(item.body ?? {}), ...extraBody};
+          if (Number.isFinite(hardTokenCap)) for (const field of ['max_tokens', 'max_completion_tokens', 'max_output_tokens', 'num_predict', 'max_new_tokens']) if (field in body) body[field] = hardTokenCap;
+          const answer = await route.chat({apiKey: lease.apiKey, model: lease.requestModel ?? item.id, messages, signal: sent, endpoint: lease.endpoint ?? route.endpoint,
+            provider: route.provider, ...(lease.trustedOrigin ? {trustedOrigin: lease.trustedOrigin} : {}),
+            ...(lease.headers ? {headers: lease.headers} : {}), ...(lease.adapt ? {adapt: lease.adapt} : {}), ...(lease.reasoning ? {reasoning: lease.reasoning} : {}), ...(lease.noThinking ? {noThinking: lease.noThinking} : {}), maxTokens: item.maxTokens ?? sampling?.maxTokens ?? this.limits.maxTokens, temperature: sampling?.temperature ?? this.limits.temperature,
+            ...(route.chatDefaults ?? {}), ...rest, ...(rest.deadlineAt !== undefined ? {now: this.now} : {}), onHeaders: route.noteHeaders,
+            ...(askedKeys.length ? {askedKeys} : {}),
+            // "Companions can see": the picture of this turn goes to this model only when the route says it takes one; a model that refuses it is not sent one again, and the request is repeated without it.
+            ...(images?.length && route.imagesFor?.(item.id, lease) === true ? {images, onImagesRejected: () => {
+              this.log(`[Vision] ${route.label} would not take the picture (${item.id}): none is sent to it again this session, and this reply is written without it`);
+              try { route.noteImagesRejected?.(item.id, lease); } catch { /* an observer never fails a reply */ }
+            }} : {}),
+            onRetry: ({attempt, error, waitMs, ms}) => this.log(`${route.label} attempt ${attempt} failed after ${ms} ms (${error.kind}${error.status ? ` ${error.status}` : ''}${error.slow ? ', no answer in time' : ''}${error.paramsRejected ? `, refused ${error.paramsRejected.names?.length ? error.paramsRejected.names.join(', ') : 'a request field'}: left out from now on` : ''}); asking again in ${waitMs} ms`),
+            extraBody: body});
+          noted(answer?.trace);
+          return answer;
+        } catch (error) {
+          noted(error?.trace); noted(error);
+          if (!(error instanceof MistralError) || !error.zeroQuota) throw error;
+          route.blocked.set(item.id, now + 10 * 60_000);
+          this.log(`no allowance for ${item.id}; trying the next model`);
+          lastError = error;
+        }
+      }
+      throw lastError;
+    } finally { try { lease.release?.(); } catch { /* best effort */ } }
+  }
+
+  /**
+   * The routes a turn may use: the provider's own, and no other. A failing Local AI never hands a turn to Mistral or Convai, with or without a saved key, with
+   * Mature content on or off (owner rule 2026-10-21, after a player's surprise cloud use): the turn fails with the local AI's own reason and the next one tries again.
+   */
+  #candidates() {
+    const first = this.routes[this.provider.route];
+    if (!first) throw new MistralError('request', 'has no route for this provider');
+    return [first];
+  }
+
+  /**
+   * `stream` (optional, bridge/reply-stream.mjs): the voice's view of the reply while it is written. It is fed the text as it
+   * arrives, told when the reply is finished (with the text the voice and subtitles end with) or failed, and a first sentence
+   * that is safe to speak is handed to the voice before the model is done. Without one the reply is built exactly as before.
+   * `confirmed` (optional promise): the reply was started on words that are not final yet (a stable live-words decode, bridge/local-stt-capture.mjs).
+   * It is written as usual, but nothing is remembered and no companion action is handed to the game until `confirmed` resolves; when it rejects
+   * (the final words differ) the reply ends there with that error and leaves no trace.
+   * `deferRecord` (optional function): called with a one-shot `commit` instead of remembering the exchange at once; the caller commits it when the
+   * reply is published and drops it otherwise, so the character never remembers lines the player did not hear.
+   */
+  async reply(config, options = {}) {
+    try {
+      return await this.#reply(config, options);
+    } catch (error) {
+      // A fault before the model is asked (no route for the provider, memory that cannot answer) must not leave the voice's stream open,
+      // or the voice waits for a head that never comes. A stream that already finished or failed ignores this.
+      try { options?.stream?.fail?.(error); } catch { /* a listener never breaks the turn */ }
+      throw error;
+    }
+  }
+
+  /**
+   * The first route's model is down (the idle stop, a reload): ask it to load now, bounded by the turn's hard cap less the room it needs to answer. Resolves the moment (this.now())
+   * the model was up, or null when there was nothing to wait for or the load did not finish in time or failed (the normal path then reports it). Never rejects, never throws.
+   */
+  #startLoading(route, signal) {
+    try {
+      if (!(route?.turnBudgetMs > 0) || route.loadPending?.() !== true || typeof route.prepare !== 'function') return null;
+      const cap = AbortSignal.timeout(Math.max(1, Math.ceil(route.turnBudgetMs + LOCAL_TURN_STRETCH_MS - LOCAL_ATTEMPT_ROOM_MS)));
+      return Promise.resolve(route.prepare(signal ? AbortSignal.any([signal, cap]) : cap)).then(ok => ok === true ? this.now() : null, () => null);
+    } catch { return null; }
+  }
+
+  /**
+   * The exchange the character remembers (what the player read, tags stripped), summarised afterwards. A reply the player never heard must not be
+   * remembered: nothing is recorded once the turn is cancelled. With `deferRecord` (a function, from the bridge) the exchange is handed to it as a
+   * one-shot `commit` and recorded only when the bridge publishes the reply; without it the exchange is recorded now, as before.
+   */
+  // `event` ({v}): the turn was a message the character started (a phone appointment event, bridge/appointment-events.mjs), so `text` is the mod's trigger and
+  // never V's words. The exchange recorded is `event.v` (a bracketed note) with her text, or nothing at all when `v` is null.
+  #remember({signal, deferRecord}, {memoryKey, text, spoken, route, profileKey, event, remembered = []}) {
+    if (event && typeof event.v !== 'string') return;
+    let done = false;
+    const commit = () => {
+      if (done) return;
+      done = true;
+      this.memory.record({...memoryKey, v: event ? event.v : text, r: stripSpeechTags(spoken), remembered});
+      this.#summarize(route, profileKey, memoryKey.profileKey);
+    };
+    if (typeof deferRecord === 'function') deferRecord(commit);
+    else if (!signal?.aborted) commit();
+  }
+
+  /** A speak-up the character says is kept in memory only (bridge/recent-lines.mjs), once the bridge publishes it: a line the player never heard does not count. */
+  #noteSpoken({signal, deferRecord}, key, spoken) {
+    let done = false;
+    const commit = () => { if (done) return; done = true; this.recent.note(key, stripSpeechTags(spoken)); };
+    if (typeof deferRecord === 'function') deferRecord(commit);
+    else if (!signal?.aborted) commit();
+  }
+
+  // The retrieval of one turn, never throwing: null when it could not run (the full blocks then stay). Its time goes on the turn's clock (stage `retrieved`) and into one log line.
+  async #retrieve(config, {text, reaction, signal}) {
+    try {
+      const result = await config.retrieval.run({text, reaction, signal, picture: typeof config.visionForMeaning === 'function'});
+      markStage('retrieved');
+      if (result && !reaction) this.log(`Talk retrieval: profile=${config.local?.profileKey ?? '-'} ${result.reason ? `none (${result.reason})` : `${result.detail ?? ''} via=${result.via}`} chars=${result.text.length} ms=${result.ms} picture=${result.picture ? 'meaning' : 'no'}`);
+      currentClock()?.annotate({retrievalMs: result?.ms});
+      return result ?? null;
+    } catch (error) {
+      if (signal?.aborted) return null;
+      this.log(`Talk retrieval failed (${String(error?.message ?? error).slice(0, 80)}); the full context is used`);
+      return null;
+    }
+  }
+
+  async #reply(config, {signal, stream, confirmed, deferRecord} = {}) {
+    if (signal?.aborted) throw cancelled();
+    const local = config?.local;
+    if (!local || typeof local.profileKey !== 'string') throw new MistralError('request', 'turn has no character');
+    const text = typeof config.text === 'string' ? config.text : '';
+    if (!text.trim()) throw new MistralError('request', 'turn has no message');
+    const started = this.now();
+    // The local AI's model may be down (the idle stop, a reload): the load starts now, beside the memory work below, and the turn's clock gives it room (see the deadline below).
+    // A line prepared ahead of the moment it is heard (config.prepared, bridge/convai-bridge.mjs startAhead) loads no model, interrupts no memory work and is sent as
+    // the lowest-priority request: it must never stand in front of a turn of V's.
+    const prepared = config?.prepared === true;
+    const loading = prepared ? null : this.#startLoading(this.routes[this.provider.route], signal);
+    // A turn starts: background memory work (fact extraction) gives way to it.
+    if (!prepared) {
+      try { this.memory?.interrupt?.(); } catch { /* best effort */ }
+      for (const stopper of [...this.stoppable]) { this.stoppable.delete(stopper); try { stopper.abort(); } catch { /* already over */ } }
+    }
+    const persona = this.personas.persona(local.profileKey, local.name);
+    const reaction = !!config.reaction;
+    if (!reaction) config = {...config, replyLengthPreference: this.replyLength()};
+    // The memory key is taken once here (a content pack with a separate memory may be switched while the turn runs); the persona and everything else keep the profile key.
+    const memoryKey = {profileKey: this.memoryKeyFor ? this.memoryKeyFor(local.profileKey) : local.profileKey, channel: local.channel, ambientKey: local.ambientKey};
+    // The stream the reply text goes through: the voice's, or one that only marks the first sentence on the turn's clock.
+    const feed = stream ?? new ReplyStream({name: persona.name, aliases: persona.aliases, isTag, speak: false});
+    // The companion actions the game offers this turn (a private conversation with a companion; never a reaction line). Which one V asked
+    // for is decided by a tiny request of its own that runs while the memory store retrieves (bridge/text-actions.mjs).
+    const menu = !reaction && typeof this.deliverAction === 'function' ? actionMenu(config.companionAction) : null;
+    // The reactions the game offers an ordinary NPC this turn (never a reaction line, never a companion: its offers come with the turn).
+    // A threats offer (docs/NPC_THREATS_COMMANDS.md) is narrowed here by V's own words, the typed line or the transcript.
+    const reactions = !reaction && typeof this.deliverAction === 'function' ? reactionMenu(config.companionAction, {heard: text}) : null;
+    // The game decided from the transcript (a spoken turn; a typed line was decided by the bridge already): handed over now, before the reply is
+    // written, so the game acts on V's words and not on what the model makes of them. Its line is written by the CompanionActions that takes it.
+    // How the words read goes on the line first (the offer's own line said unheard for a spoken turn); the hand-over closes it, by=game.
+    if (reactions?.deliver) {
+      try { if (typeof this.traceReaction === 'function') this.traceReaction(config.companionAction?.token, {route: 'text', tag: reactions.decided, screen: reactions.screen, game: reactions.game}); } catch { /* a log line never breaks a turn */ }
+      this.#act({code: `REACTION ${reactions.decided}`, message: reactions.deliver});
+    }
+    const recalled = reaction ? this.memory.recall({...memoryKey, channel: 'private'}) : this.memory.recall(memoryKey);
+    // A generic person (a resident, an archetype) has a history of its own: one line says whose, and how many exchanges it had with V before this one (docs/NPC_ARCHETYPES.md, "Identity and memory").
+    if (memoryKey.ambientKey && !reaction) this.log(`Crowd person: profile=${local.profileKey} entity=${local.entity ?? '-'} key=${String(memoryKey.ambientKey).slice(0, 8)} earlier-turns=${recalled.turns.length}`);
+    // The guard is on (Mature content on with the local AI or Custom, or an uncensored local model loaded): it reads V's words before any model is asked
+    // (bridge/mature-guard.mjs). A refusal is the character's own short line; nothing is sent to a model and nothing is stored.
+    const firstRoute = this.routes[this.provider.route];
+    if (!reaction && await this.#guardOn(firstRoute, signal)) {
+      const verdict = this.matureGuard.screenInput(text, {history: recalled.turns});
+      if (verdict.blocked) return this.#refuse(firstRoute, {config, local, feed, started, where: 'input'});
+    }
+    // Only a line with a word a request could use is sent to the decision (bridge/text-action-words.mjs): ordinary talk pays nothing.
+    const maybe = menu?.rows.length ? menu.screen(text, recalled.turns.at(-1)) : [];
+    // A route that serves one request at a time (`parallel: false`: the local AI, a model server the player runs) cannot write the reply while the decision is read: the
+    // decision is a whole request in front of the reply, and it also replaces the persona in the slot (the next reply then reads the persona again). There the model is
+    // asked only when the words certainly settle it (bridge/text-action-words.mjs certainWords): a line that is nothing but a command ("drive me", "follow me"; the game still
+    // checks the exact offer), or nothing but a question about the character herself ("do you know how to drive?"). Questions, suggestions, remarks, dismissals and every
+    // other language are decided by the model as before.
+    const serial = maybe.length > 0 && this.routes[this.provider.route]?.parallel === false;
+    const byWords = serial ? this.#settleByWords(menu, text, maybe) : null;
+    const deciding = maybe.length && !byWords ? this.#decide(this.routes[this.provider.route], menu, {text, last: recalled.turns.at(-1), signal, profileKey: local.profileKey}) : null;
+    // One action it could be: the reply is written at once as if V asked for it, and held back from the voice until the decision agrees
+    // (see #replyOn); with several, or on a route that serves one request at a time (`parallel: false`), the reply waits for the decision.
+    const guess = maybe.length && this.routes[this.provider.route]?.parallel !== false ? menu.guess(text, maybe) : null;
+    // What the memory store remembers that bears on V's words (private and phone talk of a named character; empty otherwise and
+    // whenever it cannot answer in a few hundred milliseconds).
+    let remembered = [];
+    // What bears on V's words besides memories (bridge/talk-retrieval.mjs): the character's topic views and the quest, journal and world facts. It starts beside the memory search and
+    // they share one embedding of V's words; a turn of small talk gets nothing from either. A reaction gets none either, but its world blocks are left out the same way, so the
+    // system message reads the same on a reaction and on a talk (a prompt cache keeps it). Without `config.retrieval`, or when it fails, the turn goes on with the full blocks.
+    const asking = config.contextParts && typeof config.retrieval?.run === 'function' ? this.#retrieve(config, {text, reaction: reaction || Boolean(config.phoneEvent), signal}) : null;
+    if (!reaction && config.contextParts && typeof this.memory?.retrieve === 'function') {
+      // A line of small talk ("so hows life", "okay where") brings up no memory by meaning, the same test the topic retrieval uses. The records the player edited still come along.
+      try { remembered = await this.memory.retrieve({...memoryKey, query: text, signal, ranked: !isChitchat(text)}) ?? []; } catch { remembered = []; }
+      if (signal?.aborted) throw cancelled();
+    }
+    if (asking) {
+      const result = await asking;
+      if (signal?.aborted) throw cancelled();
+      if (result) {
+        config = {...config, contextParts: withRetrievedParts(config.contextParts, result)};
+        if (result.picture && typeof config.visionForMeaning === 'function') {
+          try { const images = await config.visionForMeaning(); if (images) config = {...config, visionImages: images}; } catch { /* no view available */ }
+          if (signal?.aborted) throw cancelled();
+        }
+      }
+    }
+    const decision = byWords ? (byWords.code ? byWords : null) : deciding && !guess ? await deciding : null;
+    if (signal?.aborted) throw cancelled();
+    const chosen = decided => decided && menu.message(decided) ? decided.code : null;
+    // An ordinary NPC's reaction (docs/NPC_REACTIONS.md): the reply itself decides, so its note is only one more sentence of the prompt.
+    const withReactions = notes => [notes, reactions?.notes].filter(Boolean).join('\n');
+    const actionNotes = withReactions(menu ? menu.notes(guess ? (guess === 'NONE' ? null : guess) : chosen(decision)) : '');
+    // The game offers no ride and V plainly asks for one: the reply is held back from the voice until it is checked for a false yes (#replyOn).
+    const driveGuard = menu?.driveBlocked && DRIVE_HONEST[menu.driveBlocked] && asksForRide(text)
+      ? {code: menu.driveBlocked, line: DRIVE_HONEST[menu.driveBlocked],
+        nudge: `\n\n(The game cannot let you drive V right now: ${DRIVE_LIMIT[menu.driveBlocked]}. Answer again in your own words as yourself, without agreeing to drive or offering a ride, and say briefly what is needed.)`} : null;
+    const speculation = guess ? {guess, deciding, confirms: decided => (chosen(decided) ?? 'NONE') === guess, notesFor: decided => withReactions(menu.notes(chosen(decided)))} : null;
+    markStage('recalled');
+    const candidates = this.#candidates();
+    for (const [index, route] of candidates.entries()) {
+      try {
+        // The local AI keeps the whole turn inside its budget (LOCAL_TURN_BUDGET_MS), counted from the start of the turn, so the game still has the
+        // bridge's own explanation to show when it gives up on the request.
+        let deadlineAt = route.turnBudgetMs > 0 ? started + route.turnBudgetMs : undefined;
+        // The first turn after the model was unloaded waits for the load, and the load used up the budget: a model that came up with a few seconds left was never asked
+        // ("ran out of time before the model could be asked", 2026-10-21: a first turn after the idle stop, on a fast card). The load is capped separately (#startLoading) and
+        // the turn keeps LOCAL_ATTEMPT_ROOM_MS to ask the model once it is up, never past LOCAL_TURN_HARD_CAP_MS (the game gives up on the request 90 s after it wrote it).
+        if (deadlineAt !== undefined && index === 0 && loading) {
+          const readyAt = await loading;
+          if (readyAt !== null) {
+            let room = LOCAL_ATTEMPT_ROOM_MS;
+            try { room = Math.max(room, Number(route.attemptRoomMs?.()) || 0); } catch { /* the base room stands */ }
+            deadlineAt = Math.max(deadlineAt, Math.min(readyAt + room, started + route.turnBudgetMs + LOCAL_TURN_STRETCH_MS));
+          }
+        }
+        const outcome = await this.#replyOn(route, {config, persona, reaction, recalled, remembered, text, signal, memoryKey, profileKey: local.profileKey, feed, actionNotes, speculation, deadlineAt, lastResort: index === candidates.length - 1, tagged: reactions?.kinds.length ? reactions : null, driveGuard});
+        if (confirmed) await confirmed;
+        const elapsed = Math.round(this.now() - started);
+        const {response} = outcome;
+        this.#noteLocalTurn(route, {ok: true, trace: response.trace});
+        // What was already spoken stands: a finished reply that does not begin with it is cut back to it.
+        const reply = feed.reconcile(outcome.reply);
+        // The exchange is remembered without tags (what the player read), except a battle / loot line, which is not a talk. A reply the
+        // hard-limit guard replaced is not remembered, and neither are the words that led to it.
+        if (!reaction && !outcome.guarded) {
+          this.#remember({signal, deferRecord}, {memoryKey, text, spoken: reply, route, profileKey: local.profileKey, event: config.phoneEvent, remembered});
+        } else if (reaction && config.reaction?.kind === 'speakup' && !outcome.guarded) {
+          this.#noteSpoken({signal, deferRecord}, memoryKey.profileKey, reply);
+        }
+        markStage('replyReturned');
+        // For the slow-turn report (bridge/slow-turns.mjs): the route, its model and the prompt's token counts, numbers and names only.
+        // A cloud endpoint reports its own count in the closing chunk's `usage` (OpenAI-style, which Gemini's compatible endpoint and Mistral share): the tokens it read new and the ones its
+        // implicit prefix cache answered. A local llama-server reports the same through `timings`.
+        const used = promptUsage(response.usage);
+        currentClock()?.annotate({provider: route.name, model: response.model ?? route.models()[0]?.id,
+          promptTokens: response.trace?.timings?.promptTokens ?? used?.newTokens, cachedTokens: response.trace?.timings?.cachedTokens ?? used?.cachedTokens});
+        if (used && route.name !== 'local') this.log(`[CloudTurn] ${route.name} prompt ${used.newTokens} new + ${used.cachedTokens} cached tokens (${Math.round(100 * used.cachedTokens / Math.max(1, used.total))}% from the provider's prefix cache)${Number.isFinite(response.trace?.firstTokenMs) ? `, first word ${Math.round(response.trace.firstTokenMs)} ms` : ''}`);
+        if (deciding || byWords?.code) {
+          const settled = byWords?.code ? byWords : await deciding, act = settled && menu.message(settled);
+          // The one line of the text routes' decision (Gemini, Mistral, Custom, Local AI): what the game offered, which of it V's words could mean, who settled it and what it was.
+          // "none" with an offered ride is the answer to "she agreed to drive and nothing happened" on these routes. Codes only, never V's words.
+          try {
+            this.log(`[Action] decide profile=${local.profileKey} route=${route.name} offered=${(menu.codes ?? []).join(',') || '-'} screened=${maybe.join(',') || '-'}`
+              + ` by=${byWords?.code ? 'words' : 'model'} chose=${settled?.code ?? 'none'}${settled?.code && !act ? ' (the offer could not be resolved)' : ''}`);
+          } catch { /* a log line never breaks a turn */ }
+          if (act) this.#act({code: settled.code, message: act});
+        }
+        // The reply ended with a reaction tag the game offered (cut from the text already): hand it over, after the reply and never for a
+        // reply that was cut back to its first sentence or replaced. The game waits for the NPC to finish speaking before it acts.
+        // Exactly one line says what became of the offer (reactionTraceLine): the tag, or why there was none.
+        if (reactions && !reactions.decided) {
+          let picked = {kind: null, why: outcome.guarded ? 'guarded-reply' : 'reply-cut-back'};
+          if (!outcome.guarded && reply === outcome.reply) {
+            picked = reactions.pick(response.text);
+            if (picked.why === 'no-tag' && outcome.chosenReaction && reactions.kinds.includes(outcome.chosenReaction)) picked = {kind: outcome.chosenReaction};
+          }
+          this.#traceReaction(config, reactions, picked);
+          if (picked.kind) this.#act({code: `REACTION ${picked.kind}`, message: reactions.resolve(picked.kind)});
+        }
+        const result = this.transformReply({text: reply, sessionID: config.sessionId, transport: route.name,
+          timing: {provider: route.name, llmMs: elapsed, model: response.model ?? route.models()[0]?.id, attempts: response.attempts,
+            ...(response.failed?.length ? {llmFailed: response.failed} : {}),
+            ...(Number.isFinite(response.trace?.firstTokenMs) ? {llmFirstWordMs: response.trace.firstTokenMs} : {}),
+            ...(feed.committed ? {streamedHead: true} : {})}});
+        feed.finish(result.text, result);
+        return result;
+      } catch (error) {
+        if (signal?.aborted || error?.name === 'AbortError' && !(error instanceof MistralError)) { feed.fail(error); throw error; }
+        route.failure(error);
+        this.#noteLocalTurn(route, {ok: false, error});
+        if (index < candidates.length - 1 && route.fallsBack(error) && !feed.committed) {
+          this.log(`${route.label} could not answer (${failureKind(error) ?? 'error'}); using ${candidates[index + 1].label}`);
+          continue;
+        }
+        if (confirmed) await confirmed;
+        const standing = this.#standingReply(route, error, {reaction, config, text, memoryKey, feed, started, profileKey: local.profileKey, signal, deferRecord, remembered});
+        if (standing) return standing;
+        feed.fail(error);
+        throw error;
+      }
+    }
+    const none = new MistralError('request', 'has no route for this provider');
+    feed.fail(none);
+    throw none;
+  }
+
+  /**
+   * The local route's record of a turn. The supervisor keeps it for its diagnostics (the support report), and the log gets one line for every turn: in full for
+   * a turn that failed, for the first turn after the model was loaded (a cold prompt: the numbers to compare a slow start with) and for any turn whose first word
+   * took longer than SLOW_FIRST_WORD_MS, in a short form for the others. A model that never loaded is the supervisor's to explain. Never throws, never changes the turn.
+   */
+  #noteLocalTurn(route, {ok, trace, error}) {
+    if (route.name !== 'local' || typeof route.noteTurn !== 'function') return;
+    try {
+      if (!ok && isLocalUnavailable(error)) return;
+      // A prepared line the server refused because it was busy never ran: it is no turn, no failure and no stall (the line is simply not prepared).
+      if (!ok && error?.reason === 'busy' && error?.provider === 'local') { this.log('The local AI: a line prepared ahead was not started (' + String(error.message ?? 'busy').slice(0, 80) + ')'); return; }
+      // A slow turn on a model that did not fit the graphics memory (the game keeps most of it): the sentence the game shows says so (failureDetail).
+      if (!ok && error instanceof MistralError && error.provider === 'local' && error.slow === true) {
+        try { if (route.diagnostics?.()?.model?.offload) error.hint = 'the model is partly on the CPU'; } catch { /* a hint is optional */ }
+      }
+      const detail = ok ? undefined : failureDetail(error) ?? String(error?.message ?? 'error').slice(0, 160);
+      const {first} = route.noteTurn({ok, trace, error, detail});
+      if (first) currentClock()?.annotate({cold: true});   // the first turn after the model was loaded is slow by nature: the slow-turn report does not count it
+      // Every turn leaves one line: the wait before it was sent, the prompt (new and cached tokens) and the timings, so a report shows a delay growing from turn
+      // to turn. A turn that is neither the first since the load nor slow gets the short form (no model description, which the lines around it carry).
+      const brief = ok && !first && !((trace?.firstTokenMs ?? 0) > SLOW_FIRST_WORD_MS);
+      this.log(describeLocalTurn({ok, trace, error, detail, first, brief, diagnostics: brief ? null : route.diagnostics?.() ?? null}));
+    } catch { /* a log line never fails a turn */ }
+  }
+
+  /**
+   * A reply the service could not finish (no answer in time after the retry, a stream that went quiet, a server fault):
+   *  - the first sentence was already spoken: that sentence is the reply (the voice and the written reply agree, nothing is switched);
+   *  - nothing was spoken and the service was merely slow: a short line in the character's voice (HOLDING_LINES), not recorded in its
+   *    memory, instead of an error and a long silence. A battle or loot bark just stops, as it does for every failure.
+   * Any other failure (a refused key, a limit, no network) is still an error: the player can act on it. Returns the reply or null.
+   */
+  /** The hard-limit guard refused a message: the character answers in her own short words, no model is asked, nothing is stored. */
+  #refuse(route, {config, local, feed, started, where}) {
+    const line = this.matureGuard.refusalLine(local.profileKey);
+    this.log(refusalLog(this.matureGuard, where));
+    markStage('replyReturned');
+    const result = this.transformReply({text: line, sessionID: config.sessionId, transport: route.name,
+      timing: {provider: route.name, llmMs: Math.round(this.now() - started), model: 'mature-guard', attempts: 0, guardRefusal: where}});
+    feed.finish(result.text, result);
+    return result;
+  }
+
+  #standingReply(route, error, {reaction, config, text, memoryKey, feed, started, profileKey, signal, deferRecord, remembered}) {
+    if (!(error instanceof MistralError) || route.name === 'local') return null;
+    const head = feed.committed ? feed.head : '';
+    // A route with `holdingLines: false` (custom) never answers with a holding line: its slow answers are errors the player is told about.
+    if (!head && (reaction || !error.slow || route.holdingLines === false)) return null;
+    const spoken = head || HOLDING_LINES[this.holdingTurns++ % HOLDING_LINES.length];
+    // What the character really said is remembered; the holding line is not (it answers nothing).
+    if (head && !reaction) this.#remember({signal, deferRecord}, {memoryKey, text, spoken: head, route, profileKey, event: config.phoneEvent, remembered});
+    this.log(head ? `${route.label} stopped after the first sentence (${error.kind}); that sentence is the reply`
+      : `${route.label} did not answer in time (${(error.failed ?? []).map(item => `${item.kind} ${item.ms} ms`).join(', ') || error.kind}); the character says a short holding line`);
+    markStage('replyReturned');
+    const result = this.transformReply({text: spoken, sessionID: config.sessionId, transport: route.name,
+      timing: {provider: route.name, llmMs: Math.round(this.now() - started), model: route.models()[0]?.id, attempts: error.failed?.length ?? 1,
+        ...(error.failed?.length ? {llmFailed: error.failed} : {}), ...(head ? {streamedHead: true, replyCutShort: error.kind} : {holdingLine: true})}});
+    feed.finish(result.text, result);
+    return result;
+  }
+
+  /** The turn's one line about an ordinary NPC's reaction offer: the tag the reply chose, or why it chose none (codes only, never the words). */
+  #traceReaction(config, reactions, picked) {
+    try {
+      if (typeof this.traceReaction === 'function') {
+        this.traceReaction(config.companionAction?.token, {route: 'text', tag: picked.kind ?? null, why: picked.kind ? null : picked.why,
+          ...(reactions.screen ? {kinds: reactions.kinds, screen: reactions.screen} : {}), ...(reactions.game ? {game: reactions.game} : {})});
+        return;
+      }
+      this.log(reactionTraceLine({person: config.local?.profileKey, kinds: reactions.kinds, route: 'text', tag: picked.kind ?? null, why: picked.why, screen: reactions.screen, game: reactions.game}));
+    } catch { /* a log line never breaks a turn */ }
+  }
+
+  /** Hands the action a finished reply asked for to the game. Best effort: the spoken reply never waits for it or fails with it. */
+  #act({code, message}) {
+    // A reaction's hand-over is part of its one trace line (the CompanionActions that took it writes the result), not a second line.
+    const traced = typeof this.traceReaction === 'function' && code.startsWith('REACTION ');
+    try {
+      Promise.resolve(this.deliverAction(message)).then(
+        accepted => { if (!traced) this.log(`action ${code} ${accepted ? 'handed to the game' : 'was not accepted'}`); },
+        error => this.log(`action ${code} failed: ${error?.message ?? 'error'}`));
+    } catch (error) { this.log(`action ${code} failed: ${error?.message ?? 'error'}`); }
+  }
+
+  /**
+   * The meeting a finished holocall exchange arranged (docs/IMMERSIVE_INVITATIONS.md, "Holocalls"; bridge/call-meet.mjs). A call reply streams straight to the voice,
+   * so no tag can be taken out of it: once her reply is complete, one tiny request with no persona reads V's call line and her reply and says meet-here,
+   * meet-waypoint, cancel-meet or none. The result is handed to the game the way a Convai action is (`deliverAction`), where the lease and the one-use token of the
+   * game's offer still decide. It is never awaited by the reply: it starts after the reply is complete and is background work (on the local AI it gives way to
+   * any turn, as a summary does; on Mistral it queues behind turns). A failure, a late answer or an unclear one is "none". Never throws.
+   * `plan`: planCallMeet's result; `token`: the turn's action token (CompanionActions); resolves to the kind handed to the game, or null.
+   */
+  async decideMeet({plan, userText, replyText, token, profileKey, signal}) {
+    const route = this.routes[this.provider.route];
+    if (!route || this.closed || !plan || typeof this.deliverAction !== 'function' || signal?.aborted) return null;
+    const stopper = route.name === 'local' ? new AbortController() : null;
+    if (stopper) this.stoppable.add(stopper);
+    const own = stopper ? (signal ? AbortSignal.any([signal, stopper.signal]) : stopper.signal) : signal;
+    let kind = null;
+    try {
+      // The Local AI's slot may be held for a moment by the summary of older talk (also background work, one at a time): ask again a couple of times, never
+      // longer than the offer lives.
+      for (let attempt = 1; ; attempt++) {
+        try {
+          const response = await this.#request(route, callMeetClassifier(plan, {userText, replyText}), own,
+            {slotKey: profileKey, maxTokens: 12, temperature: 0, retries: 0, totalMs: 8000, firstByteMs: 6000, thinkingRoom: false, models: route.decisionModels?.(),
+              background: route.name === 'local', priority: 'background'});
+          kind = parseCallMeetAnswer(response.text, plan);
+          break;
+        } catch (error) {
+          if (error?.reason !== 'busy' || attempt >= 3 || own?.aborted) throw error;
+          await pause(1500, own);
+        }
+      }
+    } catch (error) {
+      if (stopper?.signal.aborted) this.log('call meeting decision put off: a turn needed the local model');
+      else if (!signal?.aborted) this.log('call meeting decision failed: ' + (failureKind(error) ?? error?.message ?? 'error'));
+      return null;
+    } finally { if (stopper) this.stoppable.delete(stopper); }
+    // Codes only: never V's words or the reply.
+    this.log(`call meeting: ${kind ?? 'none'}`);
+    if (!kind || signal?.aborted) return null;
+    try {
+      const accepted = await this.deliverAction({version: 1, token, meet: kind});
+      this.log(`call meeting ${kind} ${accepted ? 'handed to the game' : 'was not accepted'}`);
+      return accepted ? kind : null;
+    } catch (error) {
+      this.log(`call meeting ${kind} failed: ${error?.message ?? 'error'}`);
+      return null;
+    }
+  }
+
+  #quiet(route) {
+    this.quietRoutes ??= new Map();
+    if (!this.quietRoutes.has(route)) this.quietRoutes.set(route, Object.create(route, {failure: {value() {}}, success: {value() {}}}));
+    return this.quietRoutes.get(route);
+  }
+
+  /**
+   * The subtitle translation of one finished reply (bridge/subtitle-translation.mjs): one short request with no persona, no history and no memory, to the route the
+   * player talks with and to no other (`#candidates` rule: with Local AI it runs on Local AI, with Mistral on Mistral, and a failing route never hands it on). It is
+   * never awaited by the reply. On Local AI it is background work: it gives way to any turn, as a summary does, and a turn that needs the model stops it.
+   * `text`: the reply; `to`: the language code; `from`: the language it is in, when known. Resolves to the model's answer (not yet cleaned) or null. Never throws, and
+   * logs a kind only, never the text.
+   * `spoken`: the line is V's own, translated so that V's voice can say it in the Voice language (bridge/v-line-translation.mjs): somebody waits for it, so it is not
+   * background work. It is sent at normal priority, on Local AI it is never stopped by the turn it belongs to, and it asks for words to be said rather than subtitles.
+   */
+  async socialComplete({messages, signal, maxTokens = 400, temperature = 0.4, background = false} = {}) {
+    if (this.closed || !this.provider.active || signal?.aborted || !Array.isArray(messages) || messages.length > 8) return null;
+    const route = this.routes[this.provider.route];
+    if (!route) return null;
+    const cap = Number.isFinite(maxTokens) ? Math.max(50, Math.min(700, Math.floor(maxTokens))) : 400;
+    const heat = Number.isFinite(temperature) ? Math.max(0, Math.min(1, temperature)) : 0.4;
+    const result = await this.#request(route, messages, signal, {background, priority: background ? 'background' : 'text',
+      maxTokens: cap, temperature: heat, hardTokenCap: cap, sampling: {temperature: heat, maxTokens: cap}});
+    return result?.text ?? null;
+  }
+
+  async translate({text, to, from = null, signal, spoken = false, via = null} = {}) {
+    // `via` ('gemini' or 'mistral'): V's line is translated by a key the player saved for that provider although the one they talk with cannot translate (Convai answering).
+    // That route's successes and failures are not noted on the provider (they are not the conversation's: no limit state, no notice), and the player's own route is not asked.
+    const named = (via === 'gemini' || via === 'mistral') && spoken ? this.routes[via] : null;
+    const route = named ? this.#quiet(named) : this.routes[this.provider.route];
+    if (!route || this.closed || (!named && !this.provider.active) || typeof text !== 'string' || !text.trim() || signal?.aborted) return null;
+    const local = route.name === 'local';
+    const background = local && !spoken;
+    const stopper = background ? new AbortController() : null;
+    if (stopper) this.stoppable.add(stopper);
+    const own = stopper ? (signal ? AbortSignal.any([signal, stopper.signal]) : stopper.signal) : signal;
+    try {
+      const budget = spoken ? Math.min(600, Math.max(120, Math.ceil(text.length * 2.5))) : Math.min(900, Math.max(80, Math.ceil(text.length * 1.2)));
+      const total = spoken ? (local ? LOCAL_SPOKEN_REQUEST_TOTAL_MS : SPOKEN_REQUEST_TOTAL_MS) : (local ? LOCAL_REQUEST_TOTAL_MS : REQUEST_TOTAL_MS);
+      const response = await this.#request(route, (spoken ? spokenTranslationMessages : translationMessages)({text, to, from}), own,
+        {maxTokens: budget, temperature: 0.2, retries: 0, totalMs: total, firstByteMs: spoken ? (local ? 10000 : 4000) : local ? 20000 : 8000, thinkingRoom: false,
+          background, ...(background ? {priority: 'background'} : {})});
+      return typeof response?.text === 'string' ? response.text : null;
+    } catch (error) {
+      if (stopper?.signal.aborted) this.log('subtitle translation put off: a turn needed the local model');
+      else if (!signal?.aborted) this.log('subtitle translation failed: ' + (failureKind(error) ?? error?.message ?? 'error'));
+      return null;
+    } finally { if (stopper) this.stoppable.delete(stopper); }
+  }
+
+  /**
+   * Which of the offered actions V's words plainly ask for: one small request, no persona, a one-word answer. Never throws; a failure,
+   * a late answer or an unclear one is "none" (the reply is then written as plain talk with what is not possible said in its notes).
+   */
+  async #decide(route, menu, {text, last, signal, profileKey}) {
+    if (!route) return null;
+    try {
+      const response = await this.#request(route, menu.classifier({text, last}), signal,
+        {slotKey: profileKey, maxTokens: 12, temperature: 0, retries: 0, totalMs: 8000, firstByteMs: 6000, thinkingRoom: false, models: route.decisionModels?.()});
+      const decided = menu.decide(response.text);
+      if (decided) return decided;
+      return this.#plainRequest(menu, text, 'answered none or unclear');
+    } catch (error) {
+      if (signal?.aborted) return null;
+      this.log('action decision failed: ' + (failureKind(error) ?? error?.message ?? 'error'));
+      return this.#plainRequest(menu, text, 'decision failed');
+    }
+  }
+
+  /**
+   * What V's words certainly settle without a model request, for a route that answers one request at a time (bridge/text-action-words.mjs certainWords): a line that
+   * is only a command ("drive me", "follow me", "attack him") is the decision `{code, argument}`; a line that is only a question about the character herself is
+   * `{none: true}`; anything else is null (the model decides). Never a leave. Never throws.
+   */
+  #settleByWords(menu, text, maybe) {
+    try {
+      const settled = menu.settle?.(text, maybe) ?? null;
+      if (settled?.code) this.log(`action ${settled.code}: V's words are only that command, no decision asked (one request at a time)`);
+      return settled;
+    } catch { /* the model decides */ }
+    return null;
+  }
+
+  /**
+   * A decision that failed or said none, for a line that plainly asks for a ride, an attack or to come along ("drive me", "take the wheel", "attack
+   * him", "follow me"): the plain request counts. A small model misses some of these; the game still checks the exact offer. Never a leave.
+   */
+  #plainRequest(menu, text, why) {
+    let decided = null;
+    try { decided = menu.explicit?.(text) ?? null; } catch { decided = null; }
+    if (decided) this.log(`action ${decided.code}: ${why}, V's words ask for it plainly`);
+    return decided;
+  }
+
+  /**
+   * The Mature content level for a turn on `route` ('full' or 'suggestive'), or null: the setting is off, or the route is not one that may
+   * have it (MATURE_PROVIDERS: not Convai, not Mistral). The model decides the level (its licence): on the local AI it is read from the loaded model, else from the model the selection
+   * would load (route.plannedModel: this never starts the server); on Custom it is the first model the route will ask (no await).
+   * Nothing is awaited while the setting is off.
+   */
+  async #matureLevel(route, signal) {
+    if (!this.matureContent?.enabled) return null;
+    if (MATURE_PROVIDERS[route?.name] !== true) { this.#noteMature(`layer NOT applied (provider ${route?.name} never gets it)`); return null; }
+    let model = route.modelName?.() ?? null, hints = route.modelHints?.();
+    // No model is up (never loaded, an idle stop, a failed start): the level is read from the model the next start would load (the selection), never by starting one.
+    if (!model && route.plannedModel) { const planned = route.plannedModel(); model = planned?.name ?? null; hints = planned?.hints ?? hints; }
+    if (!model && route.name !== 'local') model = route.models?.()[0]?.id ?? null;
+    const level = this.matureContent.forTurn(route.name, model, hints)?.level ?? null;
+    if (level) this.#noteMature(`layer applied (level ${level}, model ${model ?? 'unknown'})`);
+    return level;
+  }
+
+  /**
+   * Does the hard-limit guard run for a turn on `route`? Only a host that has the Mature setting (the main hosts and the add-on hosts) has a guard.
+   * It runs for every provider that may have the layer (MATURE_PROVIDERS) when the setting is on. Only the local AI can be uncensored: it also runs
+   * there when the loaded model is an uncensored one even with the setting off. Off with a normal model nothing here is awaited beyond a model-name
+   * lookup and the prompt is untouched.
+   */
+  async #guardOn(route, signal) {
+    if (!this.matureContent || MATURE_PROVIDERS[route?.name] !== true) return false;
+    if (this.matureContent.enabled) return true;
+    if (route.name !== 'local') return false;
+    let model = route.modelName?.() ?? null, hints = route.modelHints?.();
+    if (!model && route.plannedModel) { const planned = route.plannedModel(); model = planned?.name ?? null; hints = planned?.hints ?? hints; }   // never starts the server (see #matureLevel)
+    const uncensored = allowanceFor(model, hints).uncensored;
+    if (uncensored) this.#noteMature(`guard applied (the loaded model is uncensored, setting off, model ${model ?? 'unknown'})`);
+    return uncensored;
+  }
+
+  /** One log line per distinct fact for the life of this host (the bridge session): the setting is on, so say what the prompt got. Never the words of a turn. */
+  #noteMature(fact) {
+    if (this.matureLogged.has(fact)) return;
+    this.matureLogged.add(fact);
+    this.log(`[MatureContent] ${fact}`);
+  }
+
+  /**
+   * The prompt profile of a turn (bridge/prompt-profiles.mjs): chosen by the route, the loaded model's tier (Local AI) or the endpoint and model (Custom), and the Mature setting; null when the host has
+   * no profiles (an add-on's host) or the route has none (Convai), which builds the shipped base prompt. A map lookup; the local tier is read from the server's status, else from the selection (the server is never started for it).
+   */
+  async #profileFor(route, mature, signal) {
+    if (!this.promptProfiles) return null;
+    try {
+      let tier = null;
+      if (route.name === 'local') tier = route.tierName?.() ?? route.plannedModel?.()?.tier ?? null;
+      const turn = {route: route.name, tier, mature: Boolean(mature), custom: route.describe?.() ?? null};
+      const profile = this.promptProfiles.resolve(turn);
+      if (profile) { const id = this.promptProfiles.idFor(turn); this.profileIds.set(profile, id); this.#noteProfile(id, profile); }
+      return profile;
+    } catch (error) {
+      if (error?.name === 'AbortError' || signal?.aborted) throw error;
+      return null;   // a profile that cannot be chosen builds the shipped prompt
+    }
+  }
+  #noteProfile(id, profile) {
+    const fact = `${id} ${profileSignature(profile)}`;
+    if (this.profilesLogged.has(fact)) return;
+    this.profilesLogged.add(fact);
+    this.log(`[PromptProfile] turn uses ${id} (${profileSignature(profile)})`);
+  }
+
+  async #replyOn(route, {config, persona, reaction, recalled, remembered, text, signal, memoryKey, profileKey, feed, actionNotes, speculation, deadlineAt, lastResort = false, tagged = null, driveGuard = null}) {
+    // The crude persona layer: the Mature setting only, never an add-on's host. The guard alone: also an uncensored model with the setting off, and add-ons.
+    const mature = this.matureContent?.enabled && !this.guardOnly ? await this.#matureLevel(route, signal) : null;
+    const guard = mature ? true : await this.#guardOn(route, signal);
+    const profile = await this.#profileFor(route, mature, signal);
+    const sampling = profile ? {...profile.sampling, stop: profile.stop} : null;
+    const length = !reaction && replyLengthStyle(config.replyLengthPreference, {
+      language: config.replyLanguage, text, channel: config.local?.channel, talkWords: persona.talkWords,
+    });
+    const caps = length?.caps ?? {sentences: this.limits.sentences ?? this.limits.replySentences, chars: this.limits.chars ?? this.limits.reply};
+    // A group round's line is told to be two brief sentences; a player who raised the profile's "Longest reply (in tokens)" gets up to three or four (bridge/group-context.mjs).
+    // Nothing changes at the default, for a speaker with a reply length of its own (persona.talkWords), a reaction line or any turn that is not a group round's.
+    if (!reaction && config?.local?.channel === 'group' && !persona.talkWords && Number.isFinite(sampling?.maxTokens)) config = withGroupLength(config, sampling.maxTokens);
+    // This turn's action notes go last in the prompt, after everything that can be cached.
+    let notes = actionNotes;
+    // The reaction an ordinary NPC chose with a tag alone (see run below), whose words came from a second request.
+    const chosen = {kind: null};
+    const cutEcho = this.echoCut && !reaction;
+    // An earlier reply of the speaker that opened with V's words (stored before this was cut) is shown to the model without them: a model copies the pattern of its own history.
+    let recentSpoken = [];
+    if (!reaction && this.spokenLines) { try { recentSpoken = this.spokenLines(profileKey) ?? []; } catch { recentSpoken = []; } }
+    const spokenTurns = cutEcho ? recalled.turns.map(turn => ({...turn, r: stripPlayerEcho(turn.r, turn.v)})) : recalled.turns;
+    // The exchanges as shown to the model leave out an opener or sentence an earlier reply of the list already had (the memory keeps what was said): a model continues the replies it reads.
+    // A talk in person (the right-now block says so): two people standing together do not announce that they are here, so such a sentence is left out of the reply too.
+    const inPerson = !reaction && /You are with V in person/.test(config.contextParts?.now ?? '');
+    let history = spokenTurns;
+    if (!reaction) { try { history = dedupeHistory(spokenTurns, {inPerson}); } catch { history = spokenTurns; } }
+    // A turn that must be answered in English (`config.replyLanguage`: a fixed English, or Automatic with a line that is clearly English) is not shown earlier replies in another
+    // language: a model continues the language of the replies above V's line, whatever the note under it says (Panam answered a typed "how are you?" in Polish, 3 Nov 2026). The memory keeps
+    // them; with some left out the turn's language note names English even where it would otherwise be silent.
+    let englishAgain = false;
+    if (!reaction && config.replyLanguage === 'en') {
+      try {
+        const english = withoutForeignReplies(history);
+        if (english.dropped) { history = english.history; englishAgain = true; this.log(`Reply language: profile=${profileKey ?? persona.name} English line, ${english.dropped} earlier repl${english.dropped === 1 ? 'y' : 'ies'} in another language left out of the prompt`); }
+      } catch { /* a language check never affects a reply */ }
+    }
+    // The character's own last replies: what a small model continues if it is not told otherwise (bridge/reply-variety.mjs). The note goes right after V's words (the closing tier),
+    // once per turn, so every build of the turn (a retry too) carries the same one. Clothes may come up again when V asks about them or the game read a change of gear.
+    // A speak-up (a companion's line nobody asked for) is a reaction and is stored in no memory: the lines she said out loud lately, speak-ups included, are kept in bridge/recent-lines.mjs
+    // and are what both a speak-up and the next talk reply are checked against. The Lite model, which repeats itself most, is also told her last lines in a short note.
+    const speakUp = reaction && config.reaction?.kind === 'speakup';
+    const lean = Boolean(profile) && LEAN_PROFILES.has(this.profileIds.get(profile));
+    const upLines = !reaction || speakUp ? this.recent.get(memoryKey?.profileKey ?? profileKey) : [];
+    const talkReplies = spokenTurns.map(turn => turn.r);
+    const ownReplies = speakUp ? [...talkReplies.slice(-3), ...upLines] : reaction ? [] : [...talkReplies, ...recentSpoken, ...upLines];
+    const clothesOk = asksAboutGear(text) || asksAboutClothes(text) || /Changed since you last saw V|clothes:/.test(`${config.contextParts?.volatile ?? ''} ${config.contextParts?.freshCodes ?? ''}`);
+    let variety = '';
+    try { variety = reaction ? '' : varietyNote(ownReplies, {clothesOk}); } catch { variety = ''; /* a note about variety never affects a reply */ }
+    // One word or two that most of her last replies carry (bridge/topic-fixation.mjs): the memories about it stay out of this prompt, the sent history keeps only the newest exchange
+    // that said it, the older-talk summary loses any sentence that restates it, and one sentence asks her to leave it alone from here on.
+    let shownMemories = remembered;
+    let shownSummary = recalled.summary;
+    try {
+      const fixated = reaction ? [] : fixatedKeys(ownReplies, text);
+      if (fixated.length) {
+        shownMemories = leavesOut(remembered, fixated);
+        const baseSummary = String(recalled.summary ?? ''), trimmedSummary = summaryWithout(recalled.summary, fixated);
+        const summaryChanged = trimmedSummary !== baseSummary;
+        if (summaryChanged) shownSummary = trimmedSummary;
+        const trimmedHistory = dropFixatedHistory(history, fixated);
+        const droppedTurns = history.length - trimmedHistory.length;
+        history = trimmedHistory;
+        variety = joinBlocks([variety, fixationNote(fixated)]);
+        this.log(`Topic fixation: profile=${profileKey ?? persona.name} ${fixated.length} word${fixated.length === 1 ? '' : 's'} left out, ${remembered.length - shownMemories.length} memor${remembered.length - shownMemories.length === 1 ? 'y' : 'ies'} held back`
+          + (droppedTurns ? `, ${droppedTurns} history turn${droppedTurns === 1 ? '' : 's'} shortened` : '') + (summaryChanged ? ', summary trimmed' : ''));
+      }
+    } catch { shownMemories = remembered; shownSummary = recalled.summary; /* a fixation check never affects a reply */ }
+    // The Lite model: her last two lines marked as ones not to say again, ahead of what the repeat check found (its general first sentence is dropped, the prompt stays small).
+    let promptText = text;
+    if (lean && !reaction) {
+      const marked = avoidNote(ownReplies);
+      if (marked) variety = joinBlocks([marked, variety.replace(/^Your last replies repeat themselves, so say this one in fresh words\.\s*/, '')]);
+    }
+    if (speakUp) { const marked = avoidNote(ownReplies, {count: 3}); if (marked) { promptText = `${text}\n\n${marked}`; variety = marked; } }
+    if (variety) this.log(`Reply variety: profile=${profileKey ?? persona.name} note of ${variety.length} chars`);
+    // `notes` can change between builds (an NPC's reaction chosen, the decision of an action), so the parts are put together for each build.
+    const partsOf = () => {
+      const language = englishAgain && config.contextParts && !/Language: [^\n]*English/.test(String(config.contextParts.volatile ?? '')) ? ENGLISH_AGAIN_CONTEXT : '';
+      const withNotes = (notes || language) && config.contextParts ? {...config.contextParts, volatile: joinBlocks([config.contextParts.volatile, language, notes])} : config.contextParts;
+      return variety && withNotes && !reaction ? {...withNotes, closing: joinBlocks([withNotes.closing, variety])} : withNotes;
+    };
+    let endingNote = '';
+    const build = nudge => buildMessages({persona, memory: shownSummary, history,
+      context: notes && !config.contextParts ? joinBlocks([config.context, notes]) : config.context,
+      contextParts: partsOf(),
+      remembered: shownMemories, text: nudge ? promptText + nudge : promptText, reaction, limits: this.limits,
+      replyLengthNote: joinBlocks([length?.note, endingNote]),
+      ...(profile ? {profile} : {}), ...(mature ? {mature} : guard ? {guard: true} : {})});
+    // A speculative request (reply()) assumes V asked for the guessed action. It shows the voice nothing until the decision agrees; if the
+    // decision says otherwise it is cancelled and the reply is written again with the right notes.
+    const spec = speculation ? {controller: new AbortController(), open: false, latest: '', missed: false, over: false} : null;
+    speculation?.deciding.then(decided => {
+      if (spec.over) return;
+      if (speculation.confirms(decided)) { spec.open = true; if (!driveGuard) { try { feed.update(spec.latest); } catch { /* the voice's view never breaks the reply */ } } }
+      else { spec.missed = true; notes = speculation.notesFor(decided); spec.controller.abort(); }
+    });
+    // An action code ("[DRIVE]") is never part of the reply: the voice, the subtitles and the memory see the text without it.
+    // An add-on speaker never says V's words: a reply that starts with V's line (or V's label) is held back from the voice until it moves on.
+    // An add-on speaker's own recent lines (its remarks as well as its replies, which the conversation memory does not hold): a reply that
+    // says one again is held back from the voice while it still matches, and is written once more if it turns out to be one.
+    const visible = soFar => {
+      // A reply that opens with V's own words asked back ("Dex?") loses them, for every speaker (rule 4 of the output rules); held back from the voice while it could still be one. Judged on the
+      // cleaned text, as the finished reply is (a speaker label or a *stage direction* before the echo must not hide it from the stream, or the voice would start on it and the finished reply,
+      // which no longer starts with that head, would be cut back to it).
+      const plain = splitActions(soFar, {streaming: true}).text;
+      let shown = plain;
+      if (!reaction) {
+        const cleanedSoFar = cleanReply(plain, {name: persona.name, aliases: persona.aliases, isTag});
+        const cut = stripEchoOpener(cleanedSoFar, text, {streaming: true});
+        // What remains starting with a quotation mark is held back: the stream cleans it once more and would take a quote pair off a reply that is not wholly quoted, so the voice's head and the finished reply would differ.
+        if (cut !== cleanedSoFar) shown = QUOTED_START.test(cut) ? '' : cut;
+        else if (cutEcho) shown = cleanedSoFar;   // the add-on cuts below work on the cleaned text too, as in the finished reply
+      }
+      if (!cutEcho) return shown;
+      const own = stripPlayerEcho(speakerTurn(shown, persona.name, {streaming: true}), text, {streaming: true});
+      return recentSpoken.length && startsLikeLine(own, recentSpoken) ? '' : own;
+    };
+    // A remark with a word limit (reaction.maxWords, an add-on's) also stops the stream at that limit plus a little, is asked for few
+    // tokens, and is cut at its last sentence end. Ordinary replies and battle barks carry no such limit and are unchanged.
+    const wordLimit = reaction && Number.isInteger(config.reaction?.maxWords) && config.reaction.maxWords > 0 ? config.reaction.maxWords : 0;
+    const shouldStop = soFar => {
+      const clean = cleanReply(visible(soFar), {name: persona.name, aliases: persona.aliases, isTag});
+      return capPoint(clean, caps) >= 0 || (wordLimit > 0 && overWords(clean, wordLimit));
+    };
+    // The pictures of this turn ("Companions can see", bridge/companion-vision.mjs), handed in with the config by attachTextProvider: never for a reaction.
+    const pictures = !reaction && Array.isArray(config?.visionImages) && config.visionImages.length ? config.visionImages : null;
+    // A reply that was only narration or stage directions cleans to nothing (bridge/narration-strip.mjs): it is asked for once more before the turn fails as empty.
+    let narrationAsked = false;
+    let endingAsked = false;
+    const lengthTokens = length?.minTokens ? Math.max(length.minTokens, sampling?.maxTokens ?? this.limits.maxTokens) : 0;
+    const run = async nudge => {
+      const messages = build(nudge);
+      markStage('promptBuilt');
+      // One line per prompt that has anything to do with fresh facts: it carries some, V asked about clothes or themself, or lines were left out as stale (names and counts only,
+      // bridge/fresh-facts.mjs). An ordinary turn with none of these writes nothing.
+      if (!reaction) { try { const note = freshNote(messages, {quiet: true}); if (note) this.log(`[FreshFacts] profile=${profileKey ?? persona.name} ${note}`); } catch { /* a log line never affects a reply */ } }
+      const sent = spec && !spec.over ? (signal ? AbortSignal.any([signal, spec.controller.signal]) : spec.controller.signal) : signal;
+      const response = await this.#request(route, messages, sent, {shouldStop, profileKey, ...(pictures ? {images: pictures} : {}), ...(config?.prepared === true ? {prepared: true, priority: 'background'} : {}), ...(sampling ? {sampling} : {}), ...(lastResort ? {lastResort} : {}), ...(deadlineAt !== undefined ? {deadlineAt} : {}), ...(wordLimit ? {maxTokens: remarkTokens(wordLimit)} : lengthTokens ? {maxTokens: lengthTokens} : {}), onDelta: (_piece, soFar) => {
+        // A reply on trial for a false yes to a ride is shown to the voice only once it has passed (the finished reply is spoken whole).
+        if (driveGuard) return;
+        const shown = visible(soFar);
+        if (spec && !spec.over) { spec.latest = shown; if (!spec.open) return; }
+        try { feed.update(shown); } catch { /* the voice's view of the reply never breaks the reply */ }
+      }});
+      if (spec && !spec.over) { await speculation.deciding; if (spec.missed) throw new MistralError('request', 'the action decision changed the notes'); }
+      markStage('fullText');
+      const {text: spoken} = splitActions(response.text);
+      // An ordinary NPC that answered with its reaction tag alone (the model decided and stopped; asking it again for "the tag and words" gets the tag
+      // alone again about half the time): the choice stands, and a second request is asked only for the words that go with it, with no tag to write.
+      const only = tagged && !chosen.kind ? reactionOnlyTag(response.text, tagged.kinds) : null;
+      if (only) {
+        this.log('NPC reaction reply was only a tag; asking once more for the words');
+        chosen.kind = only;
+        notes = reactionChosenNotes(only);
+        return run(nudge);
+      }
+      let cleaned = cleanReply(spoken, {name: persona.name, aliases: persona.aliases, isTag});
+      // Rule 4 (no opening with V's words asked back) and rule 5 (no stock closing question), kept for the small models that do not obey them; never for a battle or loot line.
+      if (!reaction) cleaned = stripEchoOpener(cleaned, text);
+      if (cutEcho) cleaned = stripPlayerEcho(cleaned, text);
+      if (!reaction) cleaned = stripStockTail(cleaned, {service: this.echoCut || SERVICE_PROFILE.test(profileKey)});
+      const hadWords = Boolean(cleaned.trim());
+      if (response.finishReason === 'length') cleaned = trimUnfinished(cleaned, {completeOnly: Boolean(length)});
+      let reply = capReply(cleaned, caps);
+      if (wordLimit) reply = capWords(reply, wordLimit);
+      if (length && !reply.trim() && hadWords) {
+        if (feed.committed) reply = feed.head;
+        else if (!endingAsked && !signal?.aborted) {
+          endingAsked = true;
+          endingNote = length.endingNote;
+          this.log('Reply had no complete sentence before its length limit; asking once more');
+          return run(nudge);
+        } else throw new MistralError('empty', 'answered without a complete sentence', {provider: route.provider});
+      }
+      // Mature content only: a reply that puts a minor and romance or sex together (or has the character claim to be under 18) is dropped for
+      // the character's own refusal; the turn is logged (never the words) and neither the reply nor V's words are remembered. A first
+      // sentence the voice already started stands (it was screened before it was spoken), and the refusal follows it.
+      if (guard) {
+        const verdict = this.matureGuard.screenReply(reply, {history: recalled.turns});
+        if (verdict.hit) {
+          this.log(refusalLog(this.matureGuard, 'output'));
+          const line = this.matureGuard.refusalLine(profileKey);
+          return {response, reply: feed.committed ? `${feed.head} ${line}` : line, guarded: true};
+        }
+      }
+      if (!reply.trim() && spoken.trim() && !narrationAsked && !signal?.aborted) {
+        narrationAsked = true;
+        this.log('Reply was only narration; asking once more for the words');
+        return run(nudge);
+      }
+      if (!reply.trim()) throw new MistralError('empty', 'answered with no text', {provider: route.provider});
+      return {response, reply};
+    };
+    // The lines this character must not say again: its profile's example lines and its own earlier replies (not for a battle or loot bark).
+    const said = speakUp ? [...upLines, ...talkReplies.slice(-3)] : reaction ? [] : [...persona.samples, ...recalled.turns.map(turn => turn.r), ...recentSpoken, ...upLines];
+    // A reworded line (the same thought in other words) counts as said again for the Lite model and for a speak-up (bridge/recent-lines.mjs echoesRecent).
+    const strict = lean || speakUp;
+    // V trying to make the character say it is an AI or a script: the reply must not take those words up, even to deny them.
+    const provoked = !reaction && provokesAiTalk(text);
+    // A first sentence that opens as one of her last replies did, or says a sentence of one, is not spoken early either: the finished reply has it left out (freshenReply below).
+    // The reply language the player fixed, when it has a script of its own: a first sentence in Latin letters is not spoken early either (a model that followed its earlier replies).
+    const fixedLanguage = typeof config.replyLanguage === 'string' ? config.replyLanguage : null;
+    const wrongScript = value => fixedLanguage !== null && replyScriptMismatch(fixedLanguage, value);
+    const refuseHead = said.length || provoked || ownReplies.length || inPerson || !reaction || fixedLanguage ? head => (length && capPoint(head, caps) >= 0) || wrongScript(head) || repeatsLine(head, said) || headRepeats(head, ownReplies, {inPerson}) || (strict && echoesRecent(head, ownReplies) !== null) || (!reaction && headHasPetName(head, ownReplies)) || (provoked && takesUpAiTalk(head)) : null;
+    // With the guard on, a first sentence that flags is never committed to the voice either.
+    if (feed && typeof feed === 'object') feed.reject = guard ? head => (refuseHead ? refuseHead(head) : false) || this.matureGuard.flagsReply(head, {history: recalled.turns}) : refuseHead;
+    let outcome;
+    const firstBegan = this.now();
+    try { outcome = await run(''); } catch (error) {
+      if (!spec?.missed || signal?.aborted) throw error;
+      spec.over = true;
+      outcome = await run('');
+    }
+    const firstMs = this.now() - firstBegan;
+    // A reply the guard replaced is final: no second attempt, no checks (the refusal is the character's own line).
+    if (outcome.guarded) { route.success(); return outcome; }
+    // A reply that steps out of character, or is a model's reasoning, gets one more try. The second answer is used unless it
+    // is reasoning again, which is never spoken (it counts as an empty answer). A reply whose first sentence the voice already
+    // started is not tried again: that sentence was checked before it was spoken, so it stands and the rest is dropped.
+    // A reply that says a line already said (an example line, its own last reply) gets the same one more try.
+    let repeated = repeatsLine(outcome.reply, said);
+    const echoed = provoked && takesUpAiTalk(outcome.reply);
+    // The same thought in other words: the sentences that echo a last line are left out when words of her own remain, else the reply is asked for again like any repeated line.
+    if (!repeated && strict && echoesRecent(outcome.reply, ownReplies)) {
+      const left = leaveOutEchoes(outcome.reply, ownReplies);
+      if (left && (!feed.committed || left.startsWith(feed.head))) { this.log('Reply variety: left a reworded repeat out of the reply'); outcome = {...outcome, reply: left}; }
+      else repeated = true;
+    }
+    // A reply that is nearly one earlier line is handled below (asked again, or its repeated sentence left out). Any other reply loses the opener she has used before, a sentence she has
+    // already said, and (in person) a sentence that only announces who is here: no request, so no time (bridge/reply-variety.mjs). Not when the voice already began with the first
+    // sentence (it passed headRepeats), unless what is left still starts with it.
+    if (!repeated && (ownReplies.length || inPerson)) {
+      try {
+        const fresher = freshenReply(outcome.reply, ownReplies, {inPerson});
+        if (fresher && (!feed.committed || fresher.reply.startsWith(feed.head))) {
+          this.log(`Reply variety: left ${fresher.dropped} repeated sentence${fresher.dropped === 1 ? '' : 's'} out of the reply`);
+          outcome = {...outcome, reply: fresher.reply};
+        }
+      } catch { /* the reply stands as it was */ }
+    }
+    // A pet name for V is rare (bridge/pet-names.mjs): the ones the rule does not allow are left out of the finished reply, the same way (not when the voice already began with the first sentence).
+    if (!repeated && !reaction) {
+      try {
+        const lean = limitPetNames(outcome.reply, ownReplies);
+        if (lean && (!feed?.committed || lean.reply.startsWith(feed.head))) {
+          this.log(`Reply variety: left ${lean.removed} pet name${lean.removed === 1 ? '' : 's'} out of the reply`);
+          outcome = {...outcome, reply: lean.reply};
+        }
+      } catch { /* the reply stands as it was */ }
+    }
+    // The reply is not in the script of the fixed language (Arabic, Russian ...): asked once more with the script named, like a reply that broke character.
+    const wrongLanguage = wrongScript(outcome.reply);
+    if ((breaksCharacter(outcome.reply) || leaksReasoning(outcome.reply) || looksCut(outcome.reply) || repeated || echoed || wrongLanguage) && !signal?.aborted) {
+      // A reply whose only fault is a line said again. Asking once more doubles the turn: a slow local turn (2026-10-20 report: the text complete at 38.5 s, the voice at 74.8 s) is
+      // not worth a second one. The repeated sentence is left out when words of the reply's own remain (nothing to wait for); otherwise the first reply is kept when the first
+      // attempt was already slow (SLOW_TURNS.slowMs) or the local server is one stall from stepping down; a quick first attempt is asked again as before.
+      const onlyRepeated = repeated && !echoed && !wrongLanguage && !breaksCharacter(outcome.reply) && !leaksReasoning(outcome.reply) && !looksCut(outcome.reply);
+      let settled = false;
+      if (onlyRepeated && !feed.committed) {
+        const trimmed = dropRepeatedLines(outcome.reply, said);
+        if (trimmed) { this.log('reply repeated a line; left the repeated sentence out'); outcome = {...outcome, reply: trimmed}; settled = true; }
+        else if (firstMs > SLOW_TURNS.slowMs || this.#stepDownNear(route)) {
+          this.log(`reply repeated a line, but the first attempt took ${Math.round(firstMs / 1000)} s${firstMs > SLOW_TURNS.slowMs ? '' : ' and the local model is about to step down'}: keeping it instead of asking once more`);
+          settled = true;
+        }
+      }
+      if (settled) { /* the reply stands */ }
+      else if (feed.committed) {
+        this.log(repeated ? 'reply repeated a line after its first sentence was spoken; keeping that sentence' : 'reply broke character after its first sentence was spoken; keeping that sentence');
+        outcome = {...outcome, reply: feed.head};
+      } else {
+        const onlyWrongLanguage = wrongLanguage && !repeated && !echoed && !breaksCharacter(outcome.reply) && !leaksReasoning(outcome.reply) && !looksCut(outcome.reply);
+        this.log(onlyWrongLanguage ? `reply was not in the script of the fixed language (${fixedLanguage}); asking once more` : repeated ? 'reply repeated a line; asking once more' : 'reply broke character; asking once more');
+        const nudge = onlyWrongLanguage ? scriptNudge(fixedLanguage, LANGUAGE_NAMES) : repeated ? FRESH_WORDS_NUDGE : echoed && !breaksCharacter(outcome.reply) ? PROVOKED_NUDGE : IN_CHARACTER_NUDGE;
+        try { outcome = await run(nudge); } catch (error) { if (signal?.aborted) throw error; /* keep the first */ }
+      }
+    }
+    // The game cannot give the ride V asked for, and the reply says yes anyway (the character is told the limit before it speaks, and a small model still
+    // plays along): one more try with the limit said again, and if that agrees too the character says the plain honest line. Nothing was spoken yet.
+    if (driveGuard && !signal?.aborted && claimsToDrive(outcome.reply)) {
+      this.log(`reply agreed to drive although the game cannot (${driveGuard.code}); asking once more`);
+      try { outcome = await run(driveGuard.nudge); } catch (error) { if (signal?.aborted) throw error; /* the first reply is judged below */ }
+      if (claimsToDrive(outcome.reply)) {
+        this.log('reply agreed to drive again; the character says the honest line');
+        outcome = {...outcome, reply: driveGuard.line};
+      }
+    }
+    if (leaksReasoning(outcome.reply) || looksCut(outcome.reply) && outcome.reply.split(/\s+/).length < 4) throw new MistralError('empty', 'answered with its reasoning or a cut-off line', {provider: route.provider});
+    route.success();
+    return chosen.kind ? {...outcome, chosenReaction: chosen.kind} : outcome;
+  }
+
+  // Is the local model server one stall from stepping down to a smaller model or the cloud (or already doing it)? Another request would only wait for the reload.
+  #stepDownNear(route) {
+    try { return route?.stepDownNear?.() === true; } catch { return false; }   // only the local route has one
+  }
+
+  /** Runs `task` when background work may run (the bridge's gate: no combat, nothing speaking); checks again every 10 s until then. */
+  #whenIdle(task) {
+    const attempt = () => {
+      if (this.closed) return;
+      if (this.gate && !this.gate()) { this.#later(attempt, this.idleRetryMs); return; }
+      task();
+    };
+    attempt();
+  }
+  #later(fn, ms) {
+    const timer = setTimeout(() => { this.timers.delete(timer); fn(); }, ms);
+    timer.unref?.();
+    this.timers.add(timer);
+  }
+
+  // Folds older exchanges into the character's summary, one request per `batch` exchanges, never while one is running for the
+  // character and not at all while the provider is known to refuse requests. Fire and forget: the reply is already on its way.
+  // The fully local route also waits until background work may run, so it never competes with a reply or a fight for the GPU.
+  // `key` is the memory key the turn took (bridge/memory-scope.mjs): the summary reads and writes that memory only, even if a content pack is switched meanwhile.
+  #summarize(route, profileKey, key = profileKey) {
+    if (!route.summarizeAllowed()) return;
+    if (this.summaries.has(key)) return;
+    const batch = this.memory.pendingSummary(key);
+    if (!batch) return;
+    this.summaries.add(key);
+    this.memory.beginSummary(key);
+    const name = this.personas.persona(profileKey).name;
+    const work = async () => {
+      // On the local AI a summary gives way to a turn: the model has one slot, a summary on a computer the game keeps busy takes tens of seconds, and a line V typed
+      // in that time waited for it (2026-10-20 report: a delay of minutes that grew as the talk went on). The batch stays pending and is folded in a quiet moment later.
+      const stopper = route.name === 'local' ? new AbortController() : null;
+      if (stopper) this.stoppable.add(stopper);
+      let again = false;
+      try {
+        // Queued behind the reply that triggered it: never within one slot of a chat request.
+        if (!route.scheduler) await pause(route.gapMs, stopper?.signal);
+        const response = await this.#request(route, summaryMessages({name, summary: batch.summary, turns: batch.turns}), stopper?.signal,
+          {maxTokens: 260, temperature: 0.3, retries: 1, totalMs: 40000, background: route.name === 'local', priority: 'background'});
+        const text = cleanReply(response.text, {name, isTag});
+        if (!this.memory.applySummary(key, text, batch)) this.memory.failSummary(key);
+      } catch (error) {
+        this.memory.failSummary(key);
+        // Put off, not failed: a turn needed the model (or one is being served, or other background work holds the slot); the next quiet moment tries again.
+        if (stopper?.signal.aborted) this.log('summary put off: a turn needed the local model');   // folded in after a later turn's reply
+        else if (error?.reason === 'busy') again = true;   // a turn, or other background work, holds the slot: asked again in a few seconds, no log line
+        else this.log('summary failed: ' + (failureKind(error) ?? 'error'));
+      } finally {
+        this.summaries.delete(key); if (stopper) this.stoppable.delete(stopper);
+        if (again && !this.closed) this.#later(() => this.#summarize(route, profileKey, key), this.idleRetryMs);
+      }
+    };
+    if (route.name === 'local' || this.gate) this.#whenIdle(() => { void work(); }); else void work();
+  }
+
+  // The memory store's fact extraction (bridge/memory-store.mjs): it decides when (idle, 6 exchanges), this makes the request.
+  async #extract({profileKey, turns, known, signal}) {
+    // The chat went to Convai after the job was planned: not a failure, so no backoff and no log (the store stops scheduling while the provider is inactive).
+    if (!this.provider.active) throw Object.assign(new MistralError('request', 'extraction is not available on this route'), {retryLater: true});
+    const route = this.routes[this.provider.route];
+    if (!route || !route.summarizeAllowed()) throw new MistralError('request', 'cannot extract facts now');
+    const name = this.personas.persona(baseOf(profileKey)).name;   // the store's key may carry a content pack (`judy@medieval`): the persona is the character's
+    let response;
+    try {
+      response = await this.#request(route, factMessages({name, turns, known}), signal,
+        {maxTokens: 300, temperature: 0.2, retries: 1, totalMs: 40000, background: route.name === 'local', priority: 'background', extraBody: route.jsonBody()});
+    } catch (error) {
+      // The local model is busy with a turn (or other background work): the memory store asks again in a few seconds instead of backing off for minutes.
+      if (error?.reason === 'busy') error.retryLater = true;
+      throw error;
+    }
+    return parseFacts(response.text, {known});
+  }
+
+  /**
+   * A companion joined or was invited: let the local server load the persona prefix into its prompt cache so the first reply is
+   * quick. Best effort, never throws, and only for routes that have a server to warm.
+   */
+  async prewarm(config) {
+    const route = this.routes[this.provider.route];
+    if (!route?.prewarm || this.closed) return;
+    try {
+      const key = config?.local?.profileKey ?? this.resolveProfile?.(config);
+      if (typeof key !== 'string') { await route.connect(undefined, {}).then(lease => lease.release?.()); return; }
+      const persona = this.personas.persona(key, config?.local?.name);
+      // With Mature content on, the layer is part of the head, so the warmed prefix is the one the first reply will use.
+      const mature = this.guardOnly ? null : await this.#matureLevel(route);
+      const guard = mature ? true : await this.#guardOn(route);
+      // The player's world rules follow the head in every prompt (bridge/mistral-prompt.mjs systemPrompt), so they are warmed with it.
+      const profile = await this.#profileFor(route, mature);
+      const shown = route.shapePersona ? await route.shapePersona(persona, {mature, guard, limits: this.limits, ...(profile ? {profile} : {})}) : persona;
+      const head = systemHead({persona: shown, limits: this.limits, ...(profile ? {profile} : {}), ...(mature ? {mature} : guard ? {guard: true} : {})});
+      await route.prewarm([{role: 'system', content: [head, worldRulesBlock(persona.worldRules)].filter(Boolean).join('\n\n')}, {role: 'user', content: '.'}], {key});
+    } catch (error) {
+      route.failure?.(error);
+      this.log('prewarm failed: ' + (failureKind(error) ?? 'error'));
+    }
+  }
+
+  /** What Forget does to this provider's memory. */
+  forget(scope) { this.recent.clear(); return this.memory.forget(scope); }
+
+  close() { this.closed = true; try { this.unwatchProvider?.(); } catch { /* already gone */ } for (const timer of this.timers) clearTimeout(timer); this.timers.clear(); }
+}
+
+/**
+ * Makes `host` (a RealtimeHost) answer text turns through `textHost` while `provider.active` is true. Only the text path is
+ * replaced: the host's browser page, local PCM playback and Convai connections stay as they are and are used again the moment
+ * the provider is Convai. While a text provider is active:
+ *   reply     the text route (the `local` field the bridge adds to a turn's configuration names the character)
+ *   prepare   refused (a speculative turn has no meaning here)
+ *   warm      succeeds at once and opens no connection (an invitation is ready without one); the local AI loads its persona prefix
+ *   readiness reports a ready connection
+ *   voiceChannel  a channel that refuses with a message the voice key turns into a notice (until local speech recognition exists)
+ * `prewarmVoice` (default true; a boolean or a function asked at each warm-up): a warm-up also opens the host's local voice renderer (the phone host has none to open; with voice playback Off the bridge says no).
+ * `speech` is an optional hook for local speech recognition (bridge/local-stt.mjs): {available(): boolean, voiceChannel({reply})}.
+ * `onPlayerText(text)` is told the text of each typed turn (not a reaction), for the microphone's language.
+ * `onReplyText(config, result)` is told each finished reply of this text route the moment it is complete (the subtitle translation starts here, bridge/subtitle-translation.mjs).
+ * It is called without waiting, and nothing it does or throws changes the reply.
+ */
+export function attachTextProvider(host, {provider, mistral, speech, prewarmVoice = true, warmCloud, onPlayerText, onReplyText} = {}) {
+  const textHost = mistral;
+  const original = {reply: host.reply, prepare: host.prepare, warm: host.warm, readiness: host.readiness, lateEmotion: host.lateEmotion,
+    refreshIdle: host.refreshIdle, voiceChannel: host.voiceChannel};
+  const withoutLocal = config => {
+    if (!config || !('local' in config || 'contextParts' in config)) return config;
+    const {local: _local, contextParts: _parts, phoneEvent: _event, ...rest} = config;
+    return rest;
+  };
+  const label = () => ({mistral: 'Mistral', local: 'the local AI', custom: 'the custom provider'})[provider.route] ?? 'Mistral';
+  // "Companions can see" (bridge/companion-vision.mjs): the picture for this turn comes from the frames already in memory (the host's turnImages never waits and never throws), and goes
+  // with the config as `visionImages`. Only the in-person host has a vision policy (the phone host has none), and only while the setting is on and the provider can see. Not a reaction.
+  // Only when V's words are about what is around them (bridge/vision-message.mjs pictureForTurn): a view sent with every turn became the topic of every reply.
+  const withPictures = (config, send) => {
+    if (!host.vision?.active || typeof host.turnImages !== 'function' || !config || config.reaction || config.phoneEvent) return send(config);
+    if (!pictureForTurn({text: config.text})) return send({...config, visionForMeaning: () => host.turnImages(config, 'reply')});
+    return host.turnImages(config, 'reply').then(images => send(images ? {...config, visionImages: images} : config), () => send(config));
+  };
+  // The finished reply is announced the moment it exists (the subtitle translation starts from it) and handed on unchanged and at once.
+  const announce = (config, replying) => !onReplyText ? replying : Promise.resolve(replying).then(result => {
+    try { onReplyText(config, result); } catch { /* an observer never breaks a turn */ }
+    return result;
+  });
+  host.reply = function reply(config, options) {
+    // The language of what the player types tells the microphone which language to expect (bridge/speech-language.mjs). Automatic
+    // reactions carry a `reaction` and English prompts of the mod's own: they say nothing about the player.
+    // (An appointment event's text is the mod's trigger too: config.phoneEvent.)
+    if (provider.active && onPlayerText && !config?.reaction && !config?.phoneEvent && typeof config?.text === 'string') { try { onPlayerText(config.text); } catch { /* an observer never breaks a turn */ } }
+    return provider.active ? withPictures(config, picked => announce(config, textHost.reply(picked, options))) : original.reply.call(this, withoutLocal(config), options);
+  };
+  host.prepare = function prepare(config, options) {
+    if (provider.active) return Promise.reject(Error(`A speculative turn is not available with ${label()}`));
+    return original.prepare.call(this, withoutLocal(config), options);
+  };
+  host.warm = function warm(config, options) {
+    if (!provider.active) return original.warm.call(this, withoutLocal(config), options);
+    // A character that is only near is not loaded into the card: its persona prefill is a GPU burst for every passer-by, and the
+    // composer, the talk key and the turn itself warm it when V starts to talk (bridge/convai-bridge.mjs warmTalkTargets).
+    if (provider.route === 'local' && options?.role !== 'nearby') void textHost.prewarm?.(config);
+    // A cloud route's connection is kept open for 60 s after its last use: opening the composer renews it (an unauthenticated request).
+    else if (warmCloud && (provider.route === 'mistral' || provider.route === 'custom' || provider.route === 'gemini')) void warmCloud({provider: provider.route});
+    // The local voice's browser and renderer page open now, while V types or looks, not in front of the first reply.
+    if (typeof prewarmVoice === 'function' ? prewarmVoice() : prewarmVoice) void this.prewarmLocal?.();
+    return Promise.resolve({connectionMs: 0, provider: provider.route});
+  };
+  host.readiness = function readiness(config, options) {
+    return provider.active ? Promise.resolve({present: true, ready: true}) : original.readiness.call(this, config, options);
+  };
+  host.lateEmotion = function lateEmotion(config, token) {
+    return provider.active ? Promise.resolve({}) : original.lateEmotion.call(this, config, token);
+  };
+  host.refreshIdle = function refreshIdle(config) {
+    return provider.active ? Promise.resolve(true) : original.refreshIdle.call(this, config);
+  };
+  host.voiceChannel = function voiceChannel() {
+    if (!provider.active) return original.voiceChannel.call(this);
+    // Local speech recognition (bridge/local-stt.mjs) supplies a channel that turns the recording into text and answers it
+    // through the text route; without it the voice key says voice needs Convai.
+    // A reply may start on a stable live-words decode before the final decode is back (bridge/local-stt-capture.mjs, `confirmed`): Mistral only
+    // (a cancelled request costs a little quota there; the local AI shares the game's GPU and a cancelled request there is not free).
+    if (speech?.available?.() && typeof speech.voiceChannel === 'function') return speech.voiceChannel({reply: (config, options) => withPictures(config, picked => announce(config, textHost.reply(picked, options))),
+      speculate: () => provider.route === 'mistral' && process.env.CYBERPUNK_CONVAI_STT_SPECULATE !== '0'});
+    const refuse = () => Promise.reject(Error(`Voice needs Convai for now: speech recognition is not available with ${label()} [mistral:voice]`));
+    return {beginVoice: refuse, finishVoice: refuse, heard: async () => '', close: async () => {}};
+  };
+  return host;
+}

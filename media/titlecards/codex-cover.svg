@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+<rect width="1920" height="1080" fill="#08191f"/>
+<polyline points="40,0 40,1080" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="120,0 120,1080" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="200,0 200,1080" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="280,0 280,1080" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="360,0 360,1080" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="440,0 440,1080" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="520,0 520,1080" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="600,0 600,1080" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="680,0 680,1080" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="760,0 760,1080" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="840,0 840,1080" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="920,0 920,1080" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="1000,0 1000,1080" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="1080,0 1080,1080" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="1160,0 1160,1080" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="1240,0 1240,1080" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="1320,0 1320,1080" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="1400,0 1400,1080" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="1480,0 1480,1080" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="1560,0 1560,1080" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="1640,0 1640,1080" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="1720,0 1720,1080" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="1800,0 1800,1080" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="1880,0 1880,1080" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="0,40 1920,40" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="0,120 1920,120" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="0,200 1920,200" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="0,280 1920,280" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="0,360 1920,360" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="0,440 1920,440" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="0,520 1920,520" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="0,600 1920,600" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="0,680 1920,680" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="0,760 1920,760" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="0,840 1920,840" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="0,920 1920,920" fill="none" stroke="#0d252c" stroke-width="1"/>
+<polyline points="0,1000 1920,1000" fill="none" stroke="#0d252c" stroke-width="1"/>
+<rect x="48" y="48" width="1824" height="984" rx="22" fill="none" stroke="#28535d" stroke-width="2"/>
+<rect x="92" y="104" width="18" height="780" rx="0" fill="#4bd6d1" stroke="none" stroke-width="2"/>
+<text x="146" y="110" dominant-baseline="text-before-edge" font-family="BIZ UDGothic, Noto Sans CJK JP, Yu Gothic, sans-serif" font-size="46" fill="#4bd6d1">AI COMPANIONS</text>
+<text x="148" y="174" dominant-baseline="text-before-edge" font-family="BIZ UDGothic, Noto Sans CJK JP, Yu Gothic, sans-serif" font-size="24" fill="#a8c1c9">COMMUNITY ADD-ON</text>
+<text x="144" y="267" dominant-baseline="text-before-edge" font-family="BIZ UDGothic, Noto Sans CJK JP, Yu Gothic, sans-serif" font-size="108" fill="#edf7f7">PARTY</text>
+<text x="144" y="405" dominant-baseline="text-before-edge" font-family="BIZ UDGothic, Noto Sans CJK JP, Yu Gothic, sans-serif" font-size="92" fill="#edf7f7">CONVERSATIONS</text>
+<text x="148" y="547" dominant-baseline="text-before-edge" font-family="BIZ UDGothic, Noto Sans CJK JP, Yu Gothic, sans-serif" font-size="48" fill="#f7ca65">AND CODEX BRIDGE</text>
+<text x="148" y="657" dominant-baseline="text-before-edge" font-family="BIZ UDGothic, Noto Sans CJK JP, Yu Gothic, sans-serif" font-size="33" fill="#a8c1c9">Let companions talk. Let V answer.</text>
+<text x="148" y="721" dominant-baseline="text-before-edge" font-family="BIZ UDGothic, Noto Sans CJK JP, Yu Gothic, sans-serif" font-size="29" fill="#a8c1c9">Optional Codex. Your chosen provider.</text>
+<rect x="1160" y="300" width="260" height="120" rx="16" fill="#102a32" stroke="#4bd6d1" stroke-width="2"/>
+<text x="1185" y="322" dominant-baseline="text-before-edge" font-family="BIZ UDGothic, Noto Sans CJK JP, Yu Gothic, sans-serif" font-size="34" fill="#edf7f7">NPC A</text>
+<rect x="1490" y="300" width="260" height="120" rx="16" fill="#102a32" stroke="#4bd6d1" stroke-width="2"/>
+<text x="1515" y="322" dominant-baseline="text-before-edge" font-family="BIZ UDGothic, Noto Sans CJK JP, Yu Gothic, sans-serif" font-size="34" fill="#edf7f7">NPC B</text>
+<polyline points="1420,360 1490,360" fill="none" stroke="#f7ca65" stroke-width="3"/>
+<polyline points="1490,377 1420,377" fill="none" stroke="#4bd6d1" stroke-width="3"/>
+<polyline points="1290,420 1290,520 1450,520" fill="none" stroke="#4bd6d1" stroke-width="3"/>
+<polyline points="1620,420 1620,520 1450,520" fill="none" stroke="#4bd6d1" stroke-width="3"/>
+<polyline points="1450,520 1450,590" fill="none" stroke="#f7ca65" stroke-width="3"/>
+<rect x="1310" y="590" width="280" height="120" rx="16" fill="#102a32" stroke="#4bd6d1" stroke-width="2"/>
+<text x="1335" y="612" dominant-baseline="text-before-edge" font-family="BIZ UDGothic, Noto Sans CJK JP, Yu Gothic, sans-serif" font-size="34" fill="#edf7f7">V</text>
+<text x="1335" y="666" dominant-baseline="text-before-edge" font-family="BIZ UDGothic, Noto Sans CJK JP, Yu Gothic, sans-serif" font-size="24" fill="#a8c1c9">Optional replies</text>
+<text x="1170" y="772" dominant-baseline="text-before-edge" font-family="BIZ UDGothic, Noto Sans CJK JP, Yu Gothic, sans-serif" font-size="24" fill="#a8c1c9">Shared experiences. Individual reactions.</text>
+<text x="1170" y="822" dominant-baseline="text-before-edge" font-family="BIZ UDGothic, Noto Sans CJK JP, Yu Gothic, sans-serif" font-size="22" fill="#a8c1c9">Concept diagram / not a game screenshot</text>
+<text x="148" y="824" dominant-baseline="text-before-edge" font-family="BIZ UDGothic, Noto Sans CJK JP, Yu Gothic, sans-serif" font-size="28" fill="#4bd6d1">CLI cloud access uses your own account.</text>
+<rect x="92" y="922" width="1736" height="66" rx="10" fill="#0b222a" stroke="none" stroke-width="2"/>
+<text x="124" y="944" dominant-baseline="text-before-edge" font-family="BIZ UDGothic, Noto Sans CJK JP, Yu Gothic, sans-serif" font-size="26" fill="#a8c1c9">Requires AI Companions 0.4.6  /  Cyberpunk 2077 2.5  /  Unofficial add-on</text>
+</svg>

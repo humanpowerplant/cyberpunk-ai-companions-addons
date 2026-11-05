@@ -1,0 +1,4 @@
+# Recipe sources must survive Git checkout byte-for-byte. Disable automatic
+# line-ending conversion; normal text diffs remain available.
+* -text
+*.png binary

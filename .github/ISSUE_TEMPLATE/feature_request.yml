@@ -1,0 +1,16 @@
+name: Feature request / 提案
+description: Describe the player problem and a focused improvement.
+title: "[Idea] "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Player problem / プレイ中の困りごと
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior and tradeoffs / 欲しい動作と考慮点
+    validations:
+      required: true

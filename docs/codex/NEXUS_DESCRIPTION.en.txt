@@ -1,0 +1,54 @@
+[size=5][b]Party Conversations and Codex Bridge[/b][/size]
+
+Let companions talk to each other about shared experiences, keep directed memories of each other, and optionally hear a short response from V. Add an optional Codex CLI text provider, or keep using Gemini and other supported providers.
+
+[b]Requires AI Companions 0.4.6 Full install / Cyberpunk 2077 2.5 / Windows・Vortex.[/b]
+[url=https://www.nexusmods.com/cyberpunk2077/mods/35436]Install the original mod and its requirements first.[/url]
+
+[size=4][b]Conversation features[/b][/size]
+[list]
+[*]Companion-to-companion conversations, not only turns addressed to V.
+[*]Locally retained shared experiences and directed relationship records.
+[*]Optional asked-only or contextual replies by V, with caps and cooldowns.
+[*]V personality, first-person/detail choices and a local profile editor.
+[*]Optional V audio through the companions' engine, using V's own reference.
+[*]Captions before voice readiness, reply-length controls and a processing HUD.
+[*]More chatter-frequency choices and opt-in scene chatter.
+[/list]
+V replies, V automatic voice and relationship reviews default [b]off[/b] for new settings. Existing saved choices are preserved. Relationship reviews and automatic replies can add model requests. A frequency is a target, not a guarantee of an exact number of spoken lines. Scene chatter can overlap original dialogue.
+
+[size=4][b]Install and start[/b][/size]
+[list=1]
+[*]Install the original 0.4.6 Full release and dependencies, then close the game.
+[*]Install this ZIP in Vortex, enable it after the base mod and Deploy. Disable old versions and the old standalone CodexBridge-Settings add-on.
+[*]Start normally. Open Companion Manager → Conversations. No apply.cmd step.
+[*]Invite two companions. Keep your working provider selected. For a short trial you may choose Often (30/hour), then restore your preferred frequency.
+[/list]
+If also using the Japanese pack, update both to the matching pair. Conflict order is base → Party/Codex → Japanese. Close the game before an update or removal; disable and Deploy to restore the remaining/original feature selection. Personal state is retained.
+
+[size=4][b]Optional Codex setup[/b][/size]
+Codex CLI is [b]a cloud client, not a local language model[/b]. Model access, usage limits and charges depend on your own eligible ChatGPT account. No CLI, subscription or authentication is bundled. This bridge rejects API-key authentication and does not bypass limits.
+
+Install the official CLI. Once, run [b]red4ext/plugins/AiNpcCodexBridge/Login.cmd[/b] inside your game folder and complete the official login yourself. New installations use a dedicated Codex home so personal coding instructions stay separate. Existing shared-home configurations are retained with a migration warning.
+
+Use the original mod's Custom provider with endpoint [b]http://127.0.0.1:17865/v1[/b] and model [b]codex-default[/b]. The bundled integration handles its local connection token; no manual API-key paste is required. Choose CLI default model / automatic reasoning under Content packs → Codex Bridge. Legacy preset models are account-dependent.
+
+The bridge uses loopback authentication, server verification, request bounds, cancellation and a read-only CLI sandbox. It is not a claim that every native CLI tool disappears or that malicious software under the same Windows account is isolated. Do not expose the port to a LAN or the internet.
+
+[size=4][b]Privacy and scope[/b][/size]
+Your selected provider receives relevant dialogue, profiles, memories and permitted game information. Vision sends game-window images only when enabled in the original mod. Cloud voice can send speech text and reference audio. Read the included privacy guide before enabling automatic features. This add-on adds no separate telemetry destination; original-mod reporting and provider policies are separate.
+
+This release candidate targets 0.4.6 / game2.5 / Windows・Vortex. Other versions, MO2 and Proton are unverified. Automated fixtures are not gameplay, performance or voice-quality proof. See the bundled compatibility/testing guide.
+
+[b]Credits:[/b] Original mod by Alystria AI. Upstream use license/notices and Convai remain. No game audio, extracted script corpus, models, runtime binaries, credentials or personal dialogue is distributed. This is unofficial.
+
+[b]AI disclosure:[/b] Generative AI, including OpenAI Codex, was used under user direction for added code, text, documentation and promotional layout. In-game responses use the player's selected provider. AI-Generated Content / AI Media.
+
+[spoiler]
+[b]日本語[/b]
+仲間同士の掛け合い・記憶、任意のV自動返答、Codex CLI連携を追加します。会話機能はGemini等でも使えます。本体0.4.6 Full install・ゲーム2.5用が必要です。
+
+ゲームを終了し、Vortexで本体より後に配置してDeploy。旧版と旧CodexBridge-Settingsを無効化します。手動applyは不要。追加設定はCompanion Manager → Conversationsです。新規ではVの返答・自動音声・関係更新はオフ。まず少ない回数から試してください。
+
+Codexを使う場合のみ、公式CLIと本人のChatGPTログインが必要です。ゲーム内フォルダーのred4ext/plugins/AiNpcCodexBridge/Login.cmdを一度自分で実行します。Codexはクラウドへ送信する方式で、無料・無制限・オフラインを保証しません。詳しい導入、データ送信、更新・削除は同梱の日本語READMEを参照してください。
+[/spoiler]

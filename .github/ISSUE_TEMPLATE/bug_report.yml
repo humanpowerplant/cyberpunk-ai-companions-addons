@@ -1,0 +1,37 @@
+name: Bug report / 不具合
+description: A short, sanitized reproduction. Do not upload keys, credentials, saves or full conversations.
+title: "[Bug] "
+body:
+  - type: markdown
+    attributes:
+      value: "Use synthetic text where possible. Never paste authentication, local connection tokens, API keys or full logs containing personal dialogue. / 認証・キー・個人会話・全セーブを投稿しないでください。"
+  - type: input
+    id: versions
+    attributes:
+      label: Game, base mod and add-on versions / 各バージョン
+    validations:
+      required: true
+  - type: input
+    id: install
+    attributes:
+      label: Install method and enabled add-on pair / 導入方法と有効な追加Mod
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: Text provider, model and voice engine / プロバイダー・モデル・音声
+  - type: input
+    id: cli
+    attributes:
+      label: Codex CLI version and isolated/shared home, if relevant / 必要ならCLI版と領域の種類
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps, expected result and actual result / 操作と期待・実際の結果
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: Minimal sanitized error / 秘密を除いた必要なエラー部分

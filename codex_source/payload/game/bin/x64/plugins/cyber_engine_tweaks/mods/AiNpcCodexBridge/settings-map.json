@@ -1,0 +1,169 @@
+{
+  "version": 2,
+  "endpoint": "http://127.0.0.1:17865/codex/settings",
+  "models": [
+    {
+      "id": "codex-default",
+      "label": "Codex default",
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "auto"
+      ]
+    },
+    {
+      "id": "gpt-6.1-sol",
+      "label": "Legacy: GPT-6.1-Sol (account dependent)",
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra",
+        "auto"
+      ]
+    },
+    {
+      "id": "gpt-6-astra",
+      "label": "Legacy: GPT-6-Astra (account dependent)",
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra",
+        "auto"
+      ]
+    },
+    {
+      "id": "gpt-6.1-terra",
+      "label": "Legacy: GPT-6.1 Terra (account dependent)",
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra",
+        "auto"
+      ]
+    },
+    {
+      "id": "gpt-6-sol",
+      "label": "Legacy: GPT-6-Sol (account dependent)",
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra",
+        "auto"
+      ]
+    },
+    {
+      "id": "gpt-6-luna",
+      "label": "Legacy: GPT-6-Luna (account dependent)",
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "auto"
+      ]
+    },
+    {
+      "id": "gpt-5.6-sol",
+      "label": "Legacy: GPT-5.6-Sol (account dependent)",
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra",
+        "auto"
+      ]
+    },
+    {
+      "id": "gpt-5.6-terra",
+      "label": "Legacy: GPT-5.6-Terra (account dependent)",
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra",
+        "auto"
+      ]
+    },
+    {
+      "id": "gpt-5.6-luna",
+      "label": "Legacy: GPT-5.6-Luna (account dependent)",
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "auto"
+      ]
+    },
+    {
+      "id": "gpt-5.5",
+      "label": "Legacy: GPT-5.5 (account dependent)",
+      "reasoningEfforts": [
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "auto"
+      ]
+    },
+    {
+      "id": "codex-default",
+      "label": "CLI default (recommended)",
+      "reasoningEfforts": [
+        "auto",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra"
+      ]
+    },
+    {
+      "id": "config-model",
+      "label": "Custom model from config.json",
+      "reasoningEfforts": [
+        "auto",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+        "ultra"
+      ]
+    }
+  ],
+  "efforts": [
+    "low",
+    "medium",
+    "high",
+    "xhigh",
+    "max",
+    "ultra",
+    "auto"
+  ],
+  "defaults": {
+    "model": 11,
+    "reasoning": 7
+  }
+}

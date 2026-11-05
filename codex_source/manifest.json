@@ -1,0 +1,158 @@
+{
+  "schema": 1,
+  "id": "codex-bridge",
+  "version": "1.2.2-rc.1",
+  "backendVersion": "1.2.0-rc.1",
+  "addonVersion": "1.2.2-rc.1",
+  "baseMod": "AI Companions 0.4.6",
+  "addonApi": "1.1",
+  "payloadRoot": "payload/game",
+  "files": [
+    {
+      "path": "red4ext/plugins/AiNpcCodexBridge/bridge.py",
+      "bytes": 50768,
+      "sha256": "50665076174afd1e99abd408ce86329a8ce403e3f011d851173c5a5185400cd8"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCodexBridge/bridge-common.ps1",
+      "bytes": 4584,
+      "sha256": "a9410d5263a85b75880b8071f604b9e052feb208ce874f84f6a98a09d7897595"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCodexBridge/check.ps1",
+      "bytes": 399,
+      "sha256": "773fad9572c8cf304c10a0a94a99d871f81559cecf619471a8469eb1a615850f"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCodexBridge/config.example.json",
+      "bytes": 213,
+      "sha256": "742051b389fd6498f67f44427d85d5b0f0f53e42984879d75df06f9b5d5225ca"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCodexBridge/model_catalog.json",
+      "bytes": 2017,
+      "sha256": "3a9f41cd576cadb3991dbc3514da883366668e52f173ecddf7bd05730d28949e"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCodexBridge/start.ps1",
+      "bytes": 3465,
+      "sha256": "e2f562ff62666d7a8b4e5c631a867fd156bea369eed4c681293a257fadc85e05"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCodexBridge/status.ps1",
+      "bytes": 533,
+      "sha256": "47c416e89282911f4e0b7b5a610c93c33f78da1a319efcfae835456529e6db7c"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCodexBridge/stop.ps1",
+      "bytes": 2203,
+      "sha256": "3a5d0705d57449e0a30d17a7fd079265235263c022170b609c017079429e4465"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCodexBridge/login.ps1",
+      "bytes": 3842,
+      "sha256": "fea733cc49f7b8727118b2936d81665c39fe33482e0eacabde8e1b5db2cc3863"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCodexBridge/Start.cmd",
+      "bytes": 105,
+      "sha256": "61731ea5854c95d352629b8e4d8c92b98eb9a25ebe9b15f97a13c612df62c705"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCodexBridge/Stop.cmd",
+      "bytes": 104,
+      "sha256": "7f1ce0533b98370627476e7604a783c30e8d180d5a0014ad7e1471fed69e970e"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCodexBridge/Login.cmd",
+      "bytes": 89,
+      "sha256": "f942a62ca016d6a5af704adb561c221a61de3888e9dd1d8fff9b8fa0b28720d0"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCodexBridge/README.ja.md",
+      "bytes": 5859,
+      "sha256": "679a1701f819e9224de3329c41c5108ae2dd080252c0c7924ed539b9021623dc"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCodexBridge/README.en.md",
+      "bytes": 5383,
+      "sha256": "4859568247131378b7cefe2961261c6afd3a94e4ff97f334da6f6ac46cf4e1d2"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCodexBridge/init.lua",
+      "bytes": 2125,
+      "sha256": "d318f0840bf240e2d737e877b79f99a11ac8adffc816affe9a5e210862258561"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCodexBridge/bridge.mjs",
+      "bytes": 8419,
+      "sha256": "b1c7181698cf69ec8b0a0d57482ebaa48ab5cd8e80100b7ad5a43f0a738c0c81"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCodexBridge/auto-start.mjs",
+      "bytes": 1856,
+      "sha256": "e7f2988edce9a4d546315c654ad58ab913468f15a3d68aef5a33ff292d649693"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCodexBridge/codex-connection.mjs",
+      "bytes": 5810,
+      "sha256": "fadd86eaa08d18debc91521fbe5ebf4c24e36c6fe11ec0ae6f36b8368680bf5b"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCodexBridge/convai-addon.json",
+      "bytes": 188,
+      "sha256": "b2c6399627ec1ce7562c5a4dae5649a60468e86e1e7a87190781dea837358df5"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCodexBridge/settings-map.json",
+      "bytes": 3240,
+      "sha256": "9045f319d37d7cc94101ca393c805f6d7fd45e8e7858431e88f5efea2b1d02b6"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCodexBridge/ui-catalog.json",
+      "bytes": 27809,
+      "sha256": "043ff86981af8bded35f8b88faf6a40013e04d9fff947bd378334caf5b17cb3b"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCodexBridge/ui-localization.lua",
+      "bytes": 8299,
+      "sha256": "cae9c8cfa9701e17ba74d4589ba563f757b6027014339d092b642b71384d323c"
+    }
+  ],
+  "settingsNamespace": "addons.codex-bridge",
+  "defaultModel": "codex-default",
+  "defaultEffort": "auto",
+  "modelIndexDefault": 11,
+  "effortIndexDefault": 7,
+  "stateDirectory": "%LOCALAPPDATA%/AiNpcCodexBridge",
+  "port": 17865,
+  "requiresPython": "AI Companions bundled app/python/python.exe or system Python 3.10+",
+  "requiresCodex": "Native Codex CLI with --ephemeral, --ignore-user-config, --ignore-rules and tool-feature controls",
+  "requiresUserLogin": "User signs in once with official CLI in the dedicated codex-home; no auth is copied",
+  "osAutostartRegistered": false,
+  "credentialsIncluded": false,
+  "liveFilesModified": false,
+  "gameplayVerified": false,
+  "interfaceLanguages": [
+    "en",
+    "zh-cn",
+    "zh-tw",
+    "es",
+    "pt-br",
+    "fr",
+    "de",
+    "it",
+    "pl",
+    "cs",
+    "hu",
+    "tr",
+    "ru",
+    "uk",
+    "ja",
+    "ko",
+    "ar"
+  ],
+  "rootInstallerOwnedFiles": [
+    "auto-feature.json"
+  ]
+}

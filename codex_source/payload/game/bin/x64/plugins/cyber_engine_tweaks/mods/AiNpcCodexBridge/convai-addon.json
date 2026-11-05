@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "id": "codex-bridge",
+  "name": "Codex Bridge",
+  "version": "1.2.2-rc.1",
+  "requires": {
+    "api": "1.1"
+  },
+  "speakers": [],
+  "bridge": "bridge.mjs"
+}

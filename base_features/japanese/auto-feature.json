@@ -1,0 +1,162 @@
+{
+  "schema": 1,
+  "id": "japanese",
+  "release": "1.0.4-rc.1",
+  "upstreamRelease": "0.4.6",
+  "baseManifestSha256": "d0c93590e6142ca84a2cb19ce76b72c82e5de6f14dca2ebd0d38ca1ba36e9334",
+  "files": [
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/character-editor-page.mjs",
+      "source": "sources/code/bridge/character-editor-page.mjs",
+      "baseSha256": "6fb4e9f1facacb476fe2b13b8e2d3d6e70e59b2836ae54e4124172ba1f06d507"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/character-editor.mjs",
+      "source": "sources/code/bridge/character-editor.mjs",
+      "baseSha256": "b1fb3cddf7c9193342fad0eb50d0e3e63df9f1577b5064e4849e73f0f772b290"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/character-overrides.mjs",
+      "source": "sources/code/bridge/character-overrides.mjs",
+      "baseSha256": "8b599fbfce6366b372630a18a73fb79e55444016a6b26df4a57e36e809912da9"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/compact-persona.mjs",
+      "source": "sources/code/bridge/compact-persona.mjs",
+      "baseSha256": "03ebd18e98c3cdc503414e57540f9eb98407339c3d207f5c517475d6509b15f8"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/context-ja-names.mjs",
+      "source": "sources/code/bridge/context-ja-names.mjs",
+      "baseSha256": null
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/context-ja.mjs",
+      "source": "sources/code/bridge/context-ja.mjs",
+      "baseSha256": null
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/convai-bridge.mjs",
+      "source": "sources/code/bridge/convai-bridge.mjs",
+      "baseSha256": "1b7f7c1dec5b14931f7d03d6e735db153dcad8adfdcc22c7079d45ceda33294d"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/editor-labels-ja.mjs",
+      "source": "sources/code/bridge/editor-labels-ja.mjs",
+      "baseSha256": null
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/intrinsic-character-context.mjs",
+      "source": "sources/code/bridge/intrinsic-character-context.mjs",
+      "baseSha256": "116da0832a0c15c46b986608e3d5d943f920bf069c683538f115c721103c2dfe"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/intrinsic-query-ja.mjs",
+      "source": "sources/code/bridge/intrinsic-query-ja.mjs",
+      "baseSha256": null
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/intrinsic-render-ja.mjs",
+      "source": "sources/code/bridge/intrinsic-render-ja.mjs",
+      "baseSha256": null
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/inworld-voice.mjs",
+      "source": "sources/code/bridge/inworld-voice.mjs",
+      "baseSha256": "37d1cef2f3832188cfe88afc889b23f9efc2a535655b422caf9baa62d6521b03"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/japanese-text.mjs",
+      "source": "sources/code/bridge/japanese-text.mjs",
+      "baseSha256": null
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/prompt-budget.mjs",
+      "source": "sources/code/bridge/prompt-budget.mjs",
+      "baseSha256": "44542c94a5a72ea31946a95a064e02ca44301a630938b30588a8cf461d80c182"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/story-knowledge.mjs",
+      "source": "sources/code/bridge/story-knowledge.mjs",
+      "baseSha256": "7906a846d9497178926e5b596239c50d87f268160eb5873e2a08f2a42fcfe001"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/talk-retrieval.mjs",
+      "source": "sources/code/bridge/talk-retrieval.mjs",
+      "baseSha256": "03cfd09ac460521a4c820680df046e55f1c5c54ba865bfd6c0a664d9f81df5ed"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/topic-material.mjs",
+      "source": "sources/code/bridge/topic-material.mjs",
+      "baseSha256": "cc48660ed06a1f9f4a26f1bbe69017a1b4fa4ff2ce693f8e83c084c1179568e0"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/turn-context.mjs",
+      "source": "sources/code/bridge/turn-context.mjs",
+      "baseSha256": "bfe8fc744bd3cffe86702df3d5b09183115d6d8068a3d808390b1d149df90848"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/world-context-ja.mjs",
+      "source": "sources/code/bridge/world-context-ja.mjs",
+      "baseSha256": null
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/world-knowledge.mjs",
+      "source": "sources/code/bridge/world-knowledge.mjs",
+      "baseSha256": "e7fca5496cd4b2bd449f9110b2212d7649d09db8da2b6fed4feaa2464abdb647"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/world-rules.mjs",
+      "source": "sources/code/bridge/world-rules.mjs",
+      "baseSha256": "b60a41410255c4ef6ed24ea24e2d580a623218916f6db1f811e648487dba7955"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/characters/world-knowledge-ja.json",
+      "source": "sources/code/characters/world-knowledge-ja.json",
+      "baseSha256": null
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/research/cyberpunk/intrinsic-text-ja.json",
+      "source": "sources/code/research/cyberpunk/intrinsic-text-ja.json",
+      "baseSha256": null
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/characters/roster.json",
+      "source": "sources/profile-overlays/roster.json",
+      "baseSha256": "fbabb8aeec56ffd9817cb2dec095e35537c7a5386f57f3f15d9f6a5193e06379",
+      "transform": "profile-overlay"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/characters/archetype-roster.json",
+      "source": "sources/profile-overlays/archetype-roster.json",
+      "baseSha256": "bc5fe03a565c3d27f2c94c5577ca98da2e923f458bc1b491a77d035e663afb5d",
+      "transform": "profile-overlay"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/init.lua",
+      "source": "sources/cet/init.lua",
+      "baseSha256": "8846b48e680a6b49dae6d6214570c9fdff1daac363b51303d7afce4be0a8daa8"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/scene-recovery.lua",
+      "source": "sources/cet/scene-recovery.lua",
+      "baseSha256": null
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/turn-context.lua",
+      "source": "sources/cet/turn-context.lua",
+      "baseSha256": "00ae3566ba941d8f17dcd0a168257eed21d28f4a867ac4a5c47afa416675aead"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/dynamic-info.mjs",
+      "source": "sources/code/bridge/dynamic-info.mjs",
+      "baseSha256": "8144ddb0bedbd838f97fa70e763285d1d9bbb1836af48c8c06f301e6d5edbc2a"
+    }
+  ],
+  "combinations": {},
+  "releaseFamily": "companion-addons-046-rc1",
+  "supportedPairing": {
+    "japanese": "1.0.4-rc.1",
+    "codex": "1.2.2-rc.1"
+  }
+}

@@ -1,0 +1,7 @@
+AI NPC Cyberpunk Mod code (Scripts) - third-party components
+
+- Native plugin (red4ext/plugins/AiNpcCyberpunkCode/CyberpunkConvaiNative.dll, built from native/core in this release for game 2.5): yyjson 0.12.0 (MIT, Copyright (c) 2020 YaoYuan) and the RED4ext.SDK headers (MIT, Copyright (c) 2020 - present Octavian Dima); the licence texts are in this folder.
+- @convai/web-sdk 1.7.0 - Apache-2.0 (compiled into app/assets/realtime-client.js; licence text in app/licenses/client/)
+- livekit-client 2.22.3 - Apache-2.0 (compiled into app/assets/realtime-client.js; licence text in app/licenses/client/)
+- Convai Web SDK (@convai/web-sdk) - Apache-2.0 (compiled into app/assets/realtime-client.js)
+- AI NPC Cyberpunk Mod itself: AI NPC Cyberpunk Mod Use License, see LICENSE.txt in this folder.

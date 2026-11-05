@@ -1,0 +1,13 @@
+# Codex Bridge portable source handoff
+
+Version 1.2.2-rc.1, backend 1.2.0-rc.1, targets AI Companions 0.4.6. `payload/game` contains 22 explicitly reviewed game-root files. `manifest.json` is regenerated with `python -B build_manifest.py` after intentional source changes; the common package builder owns auto-feature recipes and shared runtime-only composition. Vortex Deploy is sufficient for feature installation; there is no Apply.cmd step.
+
+New settings use CLI default / Auto reasoning. Legacy integer indices 1..10 and efforts 1..6 are unchanged. Model11 is recommended CLI default; model12 reads a validated custom identifier from per-user config.json. Effort7 is Auto. Account availability is not implied by a display preset. The add-on offers a 17-language primitive UI with English fallback; Japanese and English contain current setup and security descriptions.
+
+The backend uses per-user LocalAppData state, dedicated CODEX_HOME for new users, explicit one-time Login.cmd, native official Codex CLI and base-mod bundled Python or Python3.10+. No CLI binary, Python binary, auth data, model or game-derived audio/script corpus is included. Existing config/selection are preserved; legacy shared-home use is labelled and global AGENTS files are refused. Models generate only on request. Merely installing the add-on with Gemini does not start Codex.
+
+Authenticated routes require a generated local token and a fresh, port-bound HMAC proof before callers disclose Bearer. Loopback Host/Origin and redirects are guarded; HTTP handlers, request rate, payload size, generation concurrency, CLI output and deadlines are bounded. Tools are restricted using public CLI capability controls and a read-only sandbox, not advertised as a zero-tools guarantee. Upstream native apply_patch can remain registered but read-only/never rejects writes; unexpected tool events abort requests. Child cleanup targets only the bridge-created PID tree. Manual compatible service reuse never claims a PID or stops that service.
+
+Backend fixtures: `python -B -m unittest discover -s tests -v`; transport fixtures: `node --test tests/connection.test.mjs`. Synthetic runners and disposable loopback services never invoke a model or user authentication. A host process may be necessary if AppContainer blocks loopback. Functional gameplay, account entitlement, actual voice quality and every future CLI release are not verified by these fixtures.
+
+The common distribution supplies its own social-conversation overlays and notices, including the original base-mod license. The base mod and selectable Convai integration remain separate dependencies. See payload README.ja.md / README.en.md for user setup, privacy, limits and official references.

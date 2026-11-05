@@ -1,0 +1,13 @@
+[size=5][b]Japanese Dialogue and Character Pack for AI Companions[/b][/size]
+
+Japanese profiles, speech rules, names and game context for AI Companions 0.4.6. The main guide is Japanese.
+
+Requires [url=https://www.nexusmods.com/cyberpunk2077/mods/35436]the original 0.4.6 Full install for Cyberpunk 2077 2.5[/url] and its requirements. Install with Vortex after the base mod, enable and Deploy, then start normally. No apply.cmd step.
+
+Select Companion Manager → Voice AI and microphone → Voice language → Japanese. Interface language and personal character edits are separate. The optional Party/Codex add-on is not required.
+
+796 profiles receive Japanese biography/speech guidance; 744 receive 5,334 Japanese editorial translations and style examples. The other 52, including major characters, keep their upstream English example field. These are not an extracted Japanese game-script collection.
+
+No voice recordings, game scripts, models, runtime or personal state is included. Voice and microphone engines remain separate original-mod settings. See the included README for compatibility, privacy and removal.
+
+Original mod by Alystria AI. Upstream license/notices and Convai remain. Generative AI was used for added code, Japanese text, documentation and promotional layout (AI-Generated Content / AI Media).

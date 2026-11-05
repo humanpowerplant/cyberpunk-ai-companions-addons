@@ -1,0 +1,268 @@
+{
+  "schema": 1,
+  "id": "codex",
+  "release": "1.2.2-rc.1",
+  "upstreamRelease": "0.4.6",
+  "baseManifestSha256": "d0c93590e6142ca84a2cb19ce76b72c82e5de6f14dca2ebd0d38ca1ba36e9334",
+  "files": [
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/addons.lua",
+      "source": "sources/cet/addons.lua",
+      "baseSha256": "95c677a8b47bb429b89d0011e4f4cbb11e2a0ecd581099dc2dfbeba549b60cf3"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/debug-hud.lua",
+      "source": "sources/cet/debug-hud.lua",
+      "baseSha256": null
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/housemate-chat.lua",
+      "source": "sources/cet/housemate-chat.lua",
+      "baseSha256": "b3a59d9a4f39c47700b6f6ecee53dce93d367b54e8bf790891f4aeb6a8bd6fcf"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/housemate-service.lua",
+      "source": "sources/cet/housemate-service.lua",
+      "baseSha256": "0993a9c75d4f6f45939835279cb60a54abb2a85ac260a9384ddfe19f8bd88fd1"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/johnny-remarks.lua",
+      "source": "sources/cet/johnny-remarks.lua",
+      "baseSha256": "b6c6f6169ed4f4493fd315cb197e6f1c9ead6b0d56204c83385dcdac1638f939"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/locales/ar.lua",
+      "source": "sources/cet/locales/ar.lua",
+      "baseSha256": "281b6501eb7d78d9fafad55847998d0053265b0a8c2da8e7825740081f24279a"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/locales/cs.lua",
+      "source": "sources/cet/locales/cs.lua",
+      "baseSha256": "12d3a14c37c8016161c6678457180d48f84ae5e6636a5f52af3164e48daa7917"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/locales/de.lua",
+      "source": "sources/cet/locales/de.lua",
+      "baseSha256": "12bebe5d9887d719fb1d823436e1b672a38a32218be6af1c05dafedb83dd1f6b"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/locales/es.lua",
+      "source": "sources/cet/locales/es.lua",
+      "baseSha256": "4270c6597cbae519c6f0c3bbb059c67d5f496f4dc325a68402be1d60a5421cfc"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/locales/fr.lua",
+      "source": "sources/cet/locales/fr.lua",
+      "baseSha256": "7d16d4a4d8eff016b18286a1209850afcce1237437231b0c506c1ab2bf137937"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/locales/hu.lua",
+      "source": "sources/cet/locales/hu.lua",
+      "baseSha256": "f250d2b51eee0a9b5b28de65a5dd1cb3b9a4dbc8643fc6974f99e7c7aca5c1b9"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/locales/it.lua",
+      "source": "sources/cet/locales/it.lua",
+      "baseSha256": "04aacc2cbd845b2bbe122c8333d98dc768084991f7d2a1ba56933a6c05c78f47"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/locales/ko.lua",
+      "source": "sources/cet/locales/ko.lua",
+      "baseSha256": "0d0fd15a685b256e096d386f0c1d77eb46ee56971ae2ae433bbedb4b94024c35"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/locales/pl.lua",
+      "source": "sources/cet/locales/pl.lua",
+      "baseSha256": "88640b5aa233ddbcb6f3d45c47a5534392e1692710020669baebf5780667988a"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/locales/pt-br.lua",
+      "source": "sources/cet/locales/pt-br.lua",
+      "baseSha256": "063fcbaf151bc1e9680d19cfe2a09339fbc2de9b22f9fca5b73ae6ff6c601b42"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/locales/ru.lua",
+      "source": "sources/cet/locales/ru.lua",
+      "baseSha256": "f9f6242a3ac74b46e61cb18b7a6e5cc101a8c111f7f785dd6c743dd03ae5658e"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/locales/tr.lua",
+      "source": "sources/cet/locales/tr.lua",
+      "baseSha256": "c35c8177364dd3c2abe063631c4b4e11f6eee9b7a40f7adeb9a6ddb361d7b948"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/locales/uk.lua",
+      "source": "sources/cet/locales/uk.lua",
+      "baseSha256": "8ceb65639a8f261fd496d1c9cc9a40eccd4a29b0a14c4a40319899fde80c3164"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/locales/zh-cn.lua",
+      "source": "sources/cet/locales/zh-cn.lua",
+      "baseSha256": "2b2a579093b3605cf0e5dfc904274976d7282d50882e37f24e69b34764512b31"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/locales/zh-tw.lua",
+      "source": "sources/cet/locales/zh-tw.lua",
+      "baseSha256": "1abff616158388171ac3676dda4df113df1fddb0dd4540f906996015fe2b9d12"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/party-social.lua",
+      "source": "sources/cet/party-social.lua",
+      "baseSha256": null
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/service-status.lua",
+      "source": "sources/cet/service-status.lua",
+      "baseSha256": "80166780ff2546a05915c89608ecd438739f515221e60674e9a9ecc6270d59a6"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/social-single.lua",
+      "source": "sources/cet/social-single.lua",
+      "baseSha256": null
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/speak-up.lua",
+      "source": "sources/cet/speak-up.lua",
+      "baseSha256": "39782de22708c2f4ff53957ef07a4c91d6b0c3e8f1ee57ea178af097ce0f84ae"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/subtitles.lua",
+      "source": "sources/cet/subtitles.lua",
+      "baseSha256": "15a65124f5ebf510ab0aef2e5d00e91caf77ec5a21e61ce32b7f97ec203d0a2f"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/turn-context.lua",
+      "source": "sources/cet/turn-context.lua",
+      "baseSha256": "00ae3566ba941d8f17dcd0a168257eed21d28f4a867ac4a5c47afa416675aead"
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/ui-locale.lua",
+      "source": "sources/cet/ui-locale.lua",
+      "baseSha256": "d63f93ff589770ad9b4ec734eaa0417f607a5c4731237f87d2dc0429a9c2c0e0"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/character-editor-page.mjs",
+      "source": "sources/code/bridge/character-editor-page.mjs",
+      "baseSha256": "6fb4e9f1facacb476fe2b13b8e2d3d6e70e59b2836ae54e4124172ba1f06d507"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/character-editor-server.mjs",
+      "source": "sources/code/bridge/character-editor-server.mjs",
+      "baseSha256": "00c17c5fa2065165cfb7018c3c5767f4cca6002de96a112b91c4be6650cfdc19"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/dynamic-info.mjs",
+      "source": "sources/code/bridge/dynamic-info.mjs",
+      "baseSha256": "8144ddb0bedbd838f97fa70e763285d1d9bbb1836af48c8c06f301e6d5edbc2a"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/house-chat.mjs",
+      "source": "sources/code/bridge/house-chat.mjs",
+      "baseSha256": "9073c8fc43268403c11f9c0585ece6095836f052401ebe3ca9b59ebfe47994d7"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/johnny-head.mjs",
+      "source": "sources/code/bridge/johnny-head.mjs",
+      "baseSha256": "77e3c2c555becb334ec9edaea5f716a412651f662b908377ca1aea891396acdb"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/play-context.mjs",
+      "source": "sources/code/bridge/play-context.mjs",
+      "baseSha256": null
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/protocol.mjs",
+      "source": "sources/code/bridge/protocol.mjs",
+      "baseSha256": "8b92af6a4c936fcb71c66e791f848457591be2c531855d1134dd3d4cafe25293"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/quest-context.mjs",
+      "source": "sources/code/bridge/quest-context.mjs",
+      "baseSha256": "f4fe677cb7410c949b81f8aaaf6a665f74eb0efbc10cbc5ee23ddd57e887eaaa"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/reply-stream.mjs",
+      "source": "sources/code/bridge/reply-stream.mjs",
+      "baseSha256": "d982ec6bf59fe2fa506508ca97b9cfd71012101a6b54e83c53b24ba2d488ab26"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/scenery-memory.mjs",
+      "source": "sources/code/bridge/scenery-memory.mjs",
+      "baseSha256": "c4b8e4d871ec56858d4f2292b1c496a7fd041d275ed40e4bf8844dd2d96dfe20"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/social-editor.mjs",
+      "source": "sources/code/bridge/social-editor.mjs",
+      "baseSha256": null
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/social-memory.mjs",
+      "source": "sources/code/bridge/social-memory.mjs",
+      "baseSha256": null
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/social-player-profile.mjs",
+      "source": "sources/code/bridge/social-player-profile.mjs",
+      "baseSha256": null
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/speakup-context.mjs",
+      "source": "sources/code/bridge/speakup-context.mjs",
+      "baseSha256": "34226a8530950f7f49696ac91f9c113794dd490e55e4ec85481dcf24619b17db"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/text-provider-host.mjs",
+      "source": "sources/code/bridge/text-provider-host.mjs",
+      "baseSha256": "ff2658455d9da481ec1b9d8903c96248c576471f5665f32b4a133c8f5e06eaf2"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/turn-context.mjs",
+      "source": "sources/code/bridge/turn-context.mjs",
+      "baseSha256": "bfe8fc744bd3cffe86702df3d5b09183115d6d8068a3d808390b1d149df90848"
+    },
+    {
+      "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/v-auto-reply.mjs",
+      "source": "sources/code/bridge/v-auto-reply.mjs",
+      "baseSha256": null
+    },
+    {
+      "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/scene-recovery.lua",
+      "source": "sources/cet/scene-recovery.lua",
+      "baseSha256": null
+    }
+  ],
+  "combinations": {
+    "codex+japanese": [
+      {
+        "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/character-editor-page.mjs",
+        "source": "sources/combined/code/bridge/character-editor-page.mjs",
+        "baseSha256": "6fb4e9f1facacb476fe2b13b8e2d3d6e70e59b2836ae54e4124172ba1f06d507"
+      },
+      {
+        "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/play-context.mjs",
+        "source": "sources/combined/code/bridge/play-context.mjs",
+        "baseSha256": null
+      },
+      {
+        "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/turn-context.mjs",
+        "source": "sources/combined/code/bridge/turn-context.mjs",
+        "baseSha256": "bfe8fc744bd3cffe86702df3d5b09183115d6d8068a3d808390b1d149df90848"
+      },
+      {
+        "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod/turn-context.lua",
+        "source": "sources/cet/turn-context.lua",
+        "baseSha256": "00ae3566ba941d8f17dcd0a168257eed21d28f4a867ac4a5c47afa416675aead"
+      },
+      {
+        "path": "red4ext/plugins/AiNpcCyberpunkCode/app/bridge/dynamic-info.mjs",
+        "source": "sources/code/bridge/dynamic-info.mjs",
+        "baseSha256": "8144ddb0bedbd838f97fa70e763285d1d9bbb1836af48c8c06f301e6d5edbc2a"
+      }
+    ]
+  },
+  "releaseFamily": "companion-addons-046-rc1",
+  "supportedPairing": {
+    "japanese": "1.0.4-rc.1",
+    "codex": "1.2.2-rc.1"
+  }
+}

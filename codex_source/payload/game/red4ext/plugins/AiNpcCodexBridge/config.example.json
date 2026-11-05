@@ -1,0 +1,11 @@
+{
+  "host": "127.0.0.1",
+  "port": 17865,
+  "codex_path": "",
+  "codex_home": "isolated",
+  "model": "",
+  "reasoning_effort": "auto",
+  "timeout_seconds": 90,
+  "queue_wait_seconds": 5,
+  "enable_images": true
+}

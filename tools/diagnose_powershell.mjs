@@ -24,20 +24,33 @@ $ErrorActionPreference='Stop'
 [Console]::WriteLine('utility completed')
 `;
   const file = join(root,'probe.ps1'); writeFileSync(file,script);
+  const explicitFile = join(root,'explicit.ps1');
+  writeFileSync(explicitFile, `[Console]::WriteLine('before explicit import')
+$PSModuleAutoLoadingPreference='None'
+Import-Module ($PSHOME + '\\Modules\\Microsoft.PowerShell.Utility\\Microsoft.PowerShell.Utility.psd1') -ErrorAction Stop
+[Console]::WriteLine('after explicit import')
+${script}`);
   const osProfile = {...isolated};
   for (const name of ['USERPROFILE','HOME','APPDATA','LOCALAPPDATA']) {
     if (process.env[name] === undefined) delete osProfile[name];
     else osProfile[name] = process.env[name];
   }
-  for (const [label, env, encoded, ignoreInput] of [
+  const standardOs = {...isolated};
+  for (const name of ['OS','COMPUTERNAME','USERNAME','USERDOMAIN','USERDOMAIN_ROAMINGPROFILE',
+    'LOGONSERVER','NUMBER_OF_PROCESSORS','PROCESSOR_ARCHITECTURE','PROCESSOR_IDENTIFIER','PROCESSOR_LEVEL','PROCESSOR_REVISION']) {
+    if (process.env[name] !== undefined) standardOs[name] = process.env[name];
+  }
+  for (const [label, env, encoded, ignoreInput, explicit] of [
     ['inherited file',process.env,false],
     ['isolated file',isolated,false],
     ['isolated encoded',isolated,true],
     ['OS profile file',osProfile,false],
     ['isolated file, closed input',isolated,false,true],
+    ['isolated explicit import',isolated,false,true,true],
+    ['standard OS fields',standardOs,false,true],
   ]) {
     const args = ['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass',
-      ...(encoded ? ['-EncodedCommand',Buffer.from(script,'utf16le').toString('base64')] : ['-File',file])];
+      ...(encoded ? ['-EncodedCommand',Buffer.from(script,'utf16le').toString('base64')] : ['-File',explicit ? explicitFile : file])];
     const started = Date.now();
     const r = spawnSync(powershell,args,{env,encoding:'utf8',windowsHide:true,timeout:8000,
       ...(ignoreInput ? {stdio:['ignore','pipe','pipe']} : {})});

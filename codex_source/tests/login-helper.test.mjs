@@ -14,6 +14,13 @@ const actual = readFileSync(join(source, 'login.ps1'), 'utf8');
 const powershell = process.env.SystemRoot && join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe');
 const supported = process.platform === 'win32' && powershell && existsSync(powershell);
 const json = file => JSON.parse(readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
+// Core cmdlets are imported directly rather than searching every installed
+// Windows Server module while constructing the synthetic user's empty cache.
+const fixtureModules = `
+$PSModuleAutoLoadingPreference = 'None'
+Import-Module ($PSHOME + '\\Modules\\Microsoft.PowerShell.Utility\\Microsoft.PowerShell.Utility.psd1') -ErrorAction Stop
+Import-Module ($PSHOME + '\\Modules\\Microsoft.PowerShell.Management\\Microsoft.PowerShell.Management.psd1') -ErrorAction Stop
+`;
 
 function fixtureEnvironment(root, extra = {}) {
   const local = join(root, 'local-data'), roaming = join(root, 'roaming-data');
@@ -82,6 +89,7 @@ function fixture(t, {home = 'isolated', answer = 'n', guard = null, loginExit = 
   assert.ok(!copy.includes('$python = Get-BridgePython'));
   writeFileSync(join(root, 'login.ps1'), copy);
   writeFileSync(join(root, 'driver.ps1'), `
+${fixtureModules}
 $ErrorActionPreference = 'Stop'
 function global:Read-Host { param([string]$Prompt) return $env:FIXTURE_ANSWER }
 & (Join-Path $PSScriptRoot 'login.ps1') -StateDirectory (Join-Path $PSScriptRoot 'isolated-state')
@@ -165,6 +173,7 @@ test('native login process receives only the explicit environment allowlist', {s
   assert.ok(begin >= 0 && end > begin);
   const launcher = replaceOnce(actual.slice(begin,end), '[Diagnostics.Process]::Start($startInfo)', '(New-FixtureProcess $startInfo)');
   writeFileSync(join(root,'fixture.ps1'), `
+${fixtureModules}
 $ErrorActionPreference='Stop'
 function New-FixtureProcess {
   param($StartInfo)

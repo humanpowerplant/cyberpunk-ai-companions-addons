@@ -6,6 +6,7 @@ Review date: 2026-11-06. Release pair: **Japanese 1.0.4-rc.1 / Party Conversatio
 
 - Removed build dependencies on the developer's workspace, sibling source trees and Vortex download inventory. A separately supplied official Full ZIP is the only game-related build input.
 - Materialized readable source filenames; kept generated content-addressed payloads out of normal authoring.
+- Removed developer-installed Codex discovery from startup fixtures; made isolated Windows fixtures import core modules directly and use canonical temporary paths, including hosted-runner 8.3 aliases.
 - Made effective game-path fallback relative for Japanese, Codex and combined variants, preserving an explicit launcher environment override.
 - Added paired-release checks, mixed-generation fallback, missing-Full diagnostics, safe Windows relative names, and current-build checks before finalization.
 - Added authenticated loopback transport, fresh server proof, consistent configured ports, request bounds, deadlines and cancellation. External providers never receive the local bridge token.

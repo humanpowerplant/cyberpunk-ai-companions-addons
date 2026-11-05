@@ -46,6 +46,8 @@ python tests/run_cet_lua.py
 
 JavaScript tests under `codex_source/tests` and the remaining startup tests exercise mocked local processes and transports. On Windows the login helper tests execute PowerShell with the final CLI launch stubbed; they must not call the user's real login.
 
+The login fixtures import Windows PowerShell 5.1 core modules directly and canonicalize the temporary directory, avoiding empty-user module discovery and hosted Windows 8.3 path aliases. The startup fixture uses an inert executable marker with an injected runner, so no installed Codex CLI is required. If Windows fixtures fail, `node tools/diagnose_powershell.mjs` compares synthetic startup/module-loading paths without login or model calls; CI runs it only after a failure.
+
 The fuller checks require the separately supplied official archive:
 
 ```powershell

@@ -3,7 +3,7 @@
 // Codex home, bridge, model, game or server is opened.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync, rmSync, existsSync} from 'node:fs';
+import {mkdtempSync, mkdirSync, readFileSync, readdirSync, writeFileSync, rmSync, existsSync, realpathSync} from 'node:fs';
 import {join, dirname, resolve, basename} from 'node:path';
 import {tmpdir} from 'node:os';
 import {fileURLToPath} from 'node:url';
@@ -13,6 +13,9 @@ const source = resolve(dirname(fileURLToPath(import.meta.url)), '../payload/game
 const actual = readFileSync(join(source, 'login.ps1'), 'utf8');
 const powershell = process.env.SystemRoot && join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe');
 const supported = process.platform === 'win32' && powershell && existsSync(powershell);
+// Hosted Windows exposes TEMP through an 8.3 alias. PowerShell expands that
+// alias; construct every fixture from the same canonical parent from the start.
+const fixtureTemp = realpathSync.native(tmpdir());
 const json = file => JSON.parse(readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
 // Core cmdlets are imported directly rather than searching every installed
 // Windows Server module while constructing the synthetic user's empty cache.
@@ -33,7 +36,7 @@ function fixtureEnvironment(root, extra = {}) {
     'ProgramFiles', 'ProgramFiles(x86)', 'ProgramW6432', 'ProgramData', 'ALLUSERSPROFILE', 'PUBLIC']) {
     if (process.env[name] !== undefined) env[name] = process.env[name];
   }
-  return {...env, TEMP:tmpdir(), TMP:tmpdir(), USERPROFILE:root, HOME:root,
+  return {...env, TEMP:fixtureTemp, TMP:fixtureTemp, USERPROFILE:root, HOME:root,
     LOCALAPPDATA:local, APPDATA:roaming,
     // Use the Windows PowerShell 5.1 built-ins, never pwsh/hosted user modules.
     PSModulePath:join(dirname(powershell), 'Modules'),
@@ -53,9 +56,9 @@ function replaceOnce(text, before, after) {
 }
 
 function fixture(t, {home = 'isolated', answer = 'n', guard = null, loginExit = 0} = {}) {
-  const root = mkdtempSync(join(tmpdir(), 'codex-login-fixture-'));
+  const root = mkdtempSync(join(fixtureTemp, 'codex-login-fixture-'));
   t.after(() => {
-    assert.equal(dirname(root), resolve(tmpdir()));
+    assert.equal(dirname(root), fixtureTemp);
     assert.ok(basename(root).startsWith('codex-login-fixture-'));
     rmSync(root, {recursive:true, force:true});
   });
@@ -160,9 +163,9 @@ for (const guard of ['AGENTS.md', 'AGENTS.override.md']) {
 }
 
 test('native login process receives only the explicit environment allowlist', {skip:!supported}, t => {
-  const root = mkdtempSync(join(tmpdir(), 'codex-login-fixture-'));
+  const root = mkdtempSync(join(fixtureTemp, 'codex-login-fixture-'));
   t.after(() => {
-    assert.equal(dirname(root), resolve(tmpdir()));
+    assert.equal(dirname(root), fixtureTemp);
     assert.ok(basename(root).startsWith('codex-login-fixture-'));
     rmSync(root, {recursive:true,force:true});
   });

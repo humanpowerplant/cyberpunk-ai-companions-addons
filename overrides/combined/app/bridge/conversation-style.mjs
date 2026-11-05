@@ -5,7 +5,10 @@ export const OPEN_QUESTION_POLICY = 'Whether you ask V anything is your own call
   + 'driven by your personality and the moment. Do not tack a question onto a reply out of habit or just to keep the conversation going.';
 
 export function followUpContext(input) {
-  if (input.reaction || input.event) return 'This is an automatic reaction. Do not ask V a question, including rhetorical or follow-up questions.';
+  if (input.reaction || input.event) {
+    if (input.reaction?.social?.autoV === true) return 'This is an automatic companion exchange. If the event-specific instructions permit it, you may occasionally ask V a genuine, relevant question. Do not force a question or a reply from V, and respect closing-line limits. Other companions remain people you can address directly.';
+    return 'This is an automatic reaction. Do not ask V a question, including rhetorical or follow-up questions.';
+  }
   if (input.group && input.group.index !== input.group.total) {
     return 'Another companion speaks after you. Do not ask V a question or try to restart the exchange.';
   }

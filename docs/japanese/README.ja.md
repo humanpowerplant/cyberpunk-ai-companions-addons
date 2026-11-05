@@ -1,6 +1,6 @@
 # AI Companions 日本語会話・人物設定拡張
 
-**1.0.4-rc.1 / AI Companions 0.4.6 / Cyberpunk 2077 2.5 / Windows**
+**1.0.4-rc.2 / AI Companions 0.4.6 / Cyberpunk 2077 2.5 / Windows**
 
 AIに渡す人物設定やゲーム状況を、日本語での会話に向く形へ整える追加Modです。最初の導入は [4ステップの手順](QUICKSTART.ja.md) を参照してください。
 
@@ -28,7 +28,7 @@ Codex拡張は不要です。音声・マイクについては本体でエンジ
 4. 同じ追加Modの旧版を無効化し、Vortexの **Apply／Deploy** で反映します。
 5. 次の通常起動時に適用されます。手動の`apply.cmd`は不要です。
 
-両方の追加Modを使う場合は、同じ公開世代の組を使ってください。今回の組は **日本語1.0.4-rc.1 / Party Conversations and Codex Bridge 1.2.2-rc.1** です。古い片方だけを残すと、互換性診断により追加機能を適用できない場合があります。
+両方の追加Modを使う場合は、同じ公開世代の組を使ってください。今回の組は **日本語1.0.4-rc.2 / Party Conversations and Codex Bridge 1.2.2-rc.2** です。古い片方だけを残すと、互換性診断により追加機能を適用できない場合があります。
 
 日本語化を目的にしても、既存の会話言語は勝手に変えません。**Companion Manager → Voice AI and microphone → Voice language → Japanese** を確認してください。メニューの表示言語は **Conversations → Interface language** です。
 

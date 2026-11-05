@@ -31,6 +31,23 @@ function Initialize-BridgeConfiguration {
     return $configPath
 }
 
+function Enter-BridgeStartupLock {
+    param([string]$StateDirectory)
+    # Kept as an empty file after release: deleting an unlocked pathname can
+    # race a second launcher that has already acquired that same file.
+    $lockPath = Join-Path $StateDirectory 'startup.lock'
+    $deadline = [DateTime]::UtcNow.AddSeconds(20)
+    while ($true) {
+        try {
+            return [IO.File]::Open($lockPath, [IO.FileMode]::OpenOrCreate,
+                [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
+        } catch [IO.IOException] {
+            if ([DateTime]::UtcNow -ge $deadline) { throw 'Another bridge startup is still in progress. Retry after it finishes.' }
+            Start-Sleep -Milliseconds 100
+        }
+    }
+}
+
 function Get-BridgeUrl {
     param([string]$ConfigPath)
     $bridgeSettings = Get-Content -LiteralPath $ConfigPath -Raw | ConvertFrom-Json

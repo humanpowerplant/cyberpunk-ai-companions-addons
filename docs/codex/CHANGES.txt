@@ -1,6 +1,20 @@
-1.2.2-rc.1 — AI Companions 0.4.6 / game 2.5
+1.2.2-rc.2 — AI Companions 0.4.6 / game 2.5
 
 # Changes
+
+## Japanese 1.0.4-rc.2 / Party Conversations and Codex Bridge 1.2.2-rc.2
+
+Second independent review, including a cross-review of the social privacy change. Existing personal settings, character edits and saved memories remain intact. Update both add-ons together when using the pair.
+
+- Apply Dynamic info exclusions to automatic observations, party memory recall and V planning. Refilter structured old observations; retain but withhold unstructured old observations when a relevant category is off. Keep voluntary spoken disclosures as conversation evidence.
+- Permit genuine questions to V only in social events with automatic V participation enabled, retaining event-specific closing limits. Resolve a contradictory blanket question prohibition without forcing a question or a V response.
+- Read the actual hour/minute/area/motion and nested quest fields within existing snapshot limits.
+- Require both clock and last-talk sharing for raw game-time values in social context and recalled automatic observations.
+- Serialize concurrent Windows startup, preserve the receipt for an owned backend still initializing, and avoid starting a generation after cancellation or expiry during authentication checks.
+- Return bounded errors for malformed message roles, non-ASCII authorization and damaged/oversized saved model selections. Preserve damaged state for recovery and correctly identify legacy custom Codex homes.
+- Stage both complete release ZIPs before replacing existing files; check large public assets' small headers instead of skipping them completely.
+- Add regression fixtures and CI coverage for release finalization failures; clarify reply-length/HUD controls, privacy limits and saved-selection recovery.
+- Include the review record and a short decision memo. No user approval is required for the accepted fixes; real gameplay, authentication and voice checks remain separate.
 
 ## Japanese 1.0.4-rc.1 / Party Conversations and Codex Bridge 1.2.2-rc.1
 

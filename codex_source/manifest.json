@@ -1,22 +1,22 @@
 {
   "schema": 1,
   "id": "codex-bridge",
-  "version": "1.2.2-rc.1",
-  "backendVersion": "1.2.0-rc.1",
-  "addonVersion": "1.2.2-rc.1",
+  "version": "1.2.2-rc.2",
+  "backendVersion": "1.2.0-rc.2",
+  "addonVersion": "1.2.2-rc.2",
   "baseMod": "AI Companions 0.4.6",
   "addonApi": "1.1",
   "payloadRoot": "payload/game",
   "files": [
     {
       "path": "red4ext/plugins/AiNpcCodexBridge/bridge.py",
-      "bytes": 50768,
-      "sha256": "50665076174afd1e99abd408ce86329a8ce403e3f011d851173c5a5185400cd8"
+      "bytes": 52018,
+      "sha256": "cdcbafd3e5950c62a4017a09e4e44ea46832a3fe97349b922dee3febb0d0385a"
     },
     {
       "path": "red4ext/plugins/AiNpcCodexBridge/bridge-common.ps1",
-      "bytes": 4584,
-      "sha256": "a9410d5263a85b75880b8071f604b9e052feb208ce874f84f6a98a09d7897595"
+      "bytes": 5312,
+      "sha256": "891c350d3df141e8a90a30ad808989734fc574551e48dbcc6266135ba1432e24"
     },
     {
       "path": "red4ext/plugins/AiNpcCodexBridge/check.ps1",
@@ -35,8 +35,8 @@
     },
     {
       "path": "red4ext/plugins/AiNpcCodexBridge/start.ps1",
-      "bytes": 3465,
-      "sha256": "e2f562ff62666d7a8b4e5c631a867fd156bea369eed4c681293a257fadc85e05"
+      "bytes": 4893,
+      "sha256": "705c1c7de8f850566c2c6c742e7d11283cfc2687c4b0f69761aaef68770b9ce5"
     },
     {
       "path": "red4ext/plugins/AiNpcCodexBridge/status.ps1",
@@ -71,17 +71,17 @@
     {
       "path": "red4ext/plugins/AiNpcCodexBridge/README.ja.md",
       "bytes": 5859,
-      "sha256": "679a1701f819e9224de3329c41c5108ae2dd080252c0c7924ed539b9021623dc"
+      "sha256": "149a6a0b1f7d4315a45dfe8270874be3fdcf6453ba6a01aacb49274e3eca36ab"
     },
     {
       "path": "red4ext/plugins/AiNpcCodexBridge/README.en.md",
       "bytes": 5383,
-      "sha256": "4859568247131378b7cefe2961261c6afd3a94e4ff97f334da6f6ac46cf4e1d2"
+      "sha256": "16f4eb1c93d54bd4cacc3e5573f75d02906ad6a8e8f9ecf430abea5d8990e1c6"
     },
     {
       "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCodexBridge/init.lua",
       "bytes": 2125,
-      "sha256": "d318f0840bf240e2d737e877b79f99a11ac8adffc816affe9a5e210862258561"
+      "sha256": "80adfff52a1d3771ea735170e018f679287cca3afd2f08e290f4f12e58439097"
     },
     {
       "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCodexBridge/bridge.mjs",
@@ -101,7 +101,7 @@
     {
       "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCodexBridge/convai-addon.json",
       "bytes": 188,
-      "sha256": "b2c6399627ec1ce7562c5a4dae5649a60468e86e1e7a87190781dea837358df5"
+      "sha256": "042997b3d8a1529f802792e44b35023f20c0c9c2bd92da8cd093edc0f9db8695"
     },
     {
       "path": "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCodexBridge/settings-map.json",

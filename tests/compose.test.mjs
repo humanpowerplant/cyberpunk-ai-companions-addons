@@ -39,7 +39,7 @@ async function fixture(t){
  install({manifest,sourceFor:rel=>readFileSync(join(codeRoot,'app',...rel.split('/')))});
  const folder=id=>'red4ext/plugins/'+(id==='codex'?'AiNpcCodexBridge':'AiNpcJapaneseOptimization');
  const recipe=(id,name,rel,value,baseSha=sha(initial.get(rel)??Buffer.alloc(0)))=>{const source='payload/'+name;put(folder(id)+'/'+source,value);return{path:CODE+'/app/'+rel,source,sha256:sha(value),outputSha256:sha(value),baseSha256:baseSha};};
- const feature=(id,files,extra={})=>{const value={schema:1,id,upstreamRelease:'0.4.6',release:id==='codex'?'1.2.2-rc.1':'1.0.4-rc.1',releaseFamily:'companion-addons-046-rc1',supportedPairing:{codex:'1.2.2-rc.1',japanese:'1.0.4-rc.1'},baseManifestSha256:sha(manifestBytes),files,...extra};put(folder(id)+'/auto-feature.json',bytes(value));return value;};
+ const feature=(id,files,extra={})=>{const value={schema:1,id,upstreamRelease:'0.4.6',release:id==='codex'?'1.2.2-rc.2':'1.0.4-rc.2',releaseFamily:'companion-addons-046-rc2',supportedPairing:{codex:'1.2.2-rc.2',japanese:'1.0.4-rc.2'},baseManifestSha256:sha(manifestBytes),files,...extra};put(folder(id)+'/auto-feature.json',bytes(value));return value;};
  const compose=()=>composeCommunityCode({codeRoot,manifest:JSON.parse(readFileSync(join(codeRoot,'code.json')))});
  return{root,codeRoot,runtimeApp,initial,manifest,manifestBytes,put,folder,recipe,feature,compose,install,imported,
   read:rel=>readFileSync(join(root,...rel.split('/'))),remove:rel=>unlinkSync(join(root,...rel.split('/')))};
@@ -128,7 +128,7 @@ test('mixed release families or a missing pairing declaration restore base inste
  f.feature('japanese',[f.recipe('japanese','jp.mjs','bridge/example.mjs',jp)]);
  const row=f.recipe('codex','old-combined.mjs','bridge/example.mjs',both);
  for(const extra of [{release:'1.2.1-preview.3',releaseFamily:undefined,supportedPairing:undefined},
-   {releaseFamily:'another-generation'},{supportedPairing:{codex:'1.2.2-rc.1',japanese:'old'}}]) {
+   {releaseFamily:'another-generation'},{supportedPairing:{codex:'1.2.2-rc.2',japanese:'old'}}]) {
   f.feature('codex',[f.recipe('codex','cx.mjs','bridge/example.mjs',cx)],{combinations:{'codex+japanese':[row]},...extra});
   const c=f.compose();assert.deepEqual(c.features,[]);assert.equal(c.diagnostics[0].code,'COMMUNITY_PAIRING_INCOMPATIBLE');
   f.install(c);assert.equal(f.read(RUNTIME+'/bridge/example.mjs').toString(),original.toString());

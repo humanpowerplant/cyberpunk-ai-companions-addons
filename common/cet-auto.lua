@@ -4,8 +4,8 @@ if type(convaiCommunitySelectorCache) == 'table' then return convaiCommunitySele
 
 local M = {}
 local VERSION, LIMIT_BYTES, LIMIT_FILES = '0.4.6', 524288, 1024
-local RELEASE_FAMILY = 'companion-addons-046-rc1'
-local PAIRING = {codex = '1.2.2-rc.1', japanese = '1.0.4-rc.1'}
+local RELEASE_FAMILY = 'companion-addons-046-rc2'
+local PAIRING = {codex = '1.2.2-rc.2', japanese = '1.0.4-rc.2'}
 local PREFIX = '[AI Companions Community] '
 local booted, failure, selected, compiled = false, nil, nil, nil
 local loading = {}

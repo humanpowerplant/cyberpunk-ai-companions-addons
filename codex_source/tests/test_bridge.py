@@ -231,6 +231,40 @@ class BridgeTests(unittest.TestCase):
         status, _ = self.request({"messages": [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": {"untrusted": "value"}}}]}]})
         self.assertEqual(status, 400)
 
+    def test_nonstring_message_roles_return_a_bounded_client_error(self):
+        for role in ([], {}, 42, None):
+            with self.subTest(role=role):
+                status, data = self.request({"messages": [{"role": role, "content": "fixture"}]})
+                self.assertEqual(status, 400)
+                self.assertIn("unsupported_message_role", data)
+        self.assertFalse(self.runner.calls)
+
+    def test_non_ascii_authorization_is_rejected_without_crashing_the_handler(self):
+        status, data = self.request({"messages": [{"role": "user", "content": "fixture"}]},
+                                    headers={"Authorization": "Bearer \u00e9"})
+        self.assertEqual(status, 401)
+        self.assertIn("local_token_required", data)
+        self.assertFalse(self.runner.calls)
+
+    def test_custom_home_keeps_the_shared_home_warning(self):
+        for configured, expected in (("", "legacy-shared"), ("isolated", "dedicated"),
+                                     (str(Path(self.temporary.name) / "custom-home"), "legacy-shared")):
+            self.config.codex_home = configured
+            connection = http.client.HTTPConnection("127.0.0.1", self.server.server_port, timeout=5)
+            connection.request("GET", "/healthz")
+            response = connection.getresponse()
+            self.assertEqual(json.loads(response.read())["instruction_home"], expected)
+            connection.close()
+
+    def test_invalid_saved_selection_fails_closed_without_rewriting_user_data(self):
+        path = Path(self.temporary.name) / "invalid-selection.json"
+        for raw in ("[]", "null", "{broken", " " * 16385):
+            path.write_text(raw, encoding="utf-8")
+            with self.assertRaises(bridge.BridgeError) as error:
+                bridge.BridgeServer(self.config, self.runner, settings_path=path)
+            self.assertEqual(error.exception.code, "invalid_saved_selection")
+            self.assertEqual(path.read_text(encoding="utf-8"), raw)
+
     def test_auto_omits_model_and_effort_flags(self):
         args = bridge.cli_arguments(dataclasses.replace(self.config, model="", reasoning_effort="auto"), Path(self.temporary.name), [])
         self.assertNotIn("--model", args)

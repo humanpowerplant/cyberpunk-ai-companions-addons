@@ -1,6 +1,7 @@
 """Create explicit game-root ZIPs only after the deployment/startup fixtures pass."""
 from pathlib import Path
 import json
+import tempfile
 import zipfile
 
 ROOT = Path(__file__).resolve().parent
@@ -44,29 +45,46 @@ def main():
         ready.append((package, members))
     destination = ROOT / "releases"
     destination.mkdir(exist_ok=True)
-    archives = []
-    for package, members in ready:
-        archive = destination / package["archive"]
-        with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as output:
-            for member in members:
-                file = ROOT / package["package"] / member
-                if member.startswith("/") or ".." in Path(member).parts or file.is_symlink():
-                    raise ValueError("Unsafe archive member")
-                entry = zipfile.ZipInfo(member, (2026, 11, 6, 0, 0, 0))
-                entry.compress_type = zipfile.ZIP_DEFLATED
-                entry.external_attr = 0o644 << 16
-                output.writestr(entry, file.read_bytes())
-        with zipfile.ZipFile(archive) as checked:
-            if checked.testzip() is not None or sorted(checked.namelist()) != sorted(members):
-                raise ValueError("ZIP membership/CRC failed")
-        archives.append({"file": archive.name, "version": package["version"], "bytes": archive.stat().st_size, "members": len(members)})
-    (destination / "release-summary.json").write_text(json.dumps({"archives": archives,
-        "upstreamRelease": "0.4.6", "deployment": "Vortex Enable/Deploy; automatic next startup", "manualApplyRequired": False,
-        "fixtureScenarios": len(report["scenarios"]),
-        "mixedReleaseScenarios": len(report.get("mixedReleaseCases", [])),
-        "totalFixtureScenarios": len(report["scenarios"]) + len(report.get("mixedReleaseCases", [])),
-        "publishedToNexus": False, "gameplayVerified": False,
-        "archiveWideHashScan": False}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    archives, staged = [], []
+    def stage(target):
+        # Do not truncate a previously usable release when archive creation is
+        # interrupted (for example, a full disk). No recursive cleanup is used.
+        with tempfile.NamedTemporaryFile(prefix="." + target.name + ".", suffix=".tmp", dir=destination, delete=False) as handle:
+            temporary = Path(handle.name)
+        staged.append((temporary, target))
+        return temporary
+    try:
+        for package, members in ready:
+            archive = destination / package["archive"]
+            temporary = stage(archive)
+            with zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as output:
+                for member in members:
+                    file = ROOT / package["package"] / member
+                    if member.startswith("/") or ".." in Path(member).parts or file.is_symlink():
+                        raise ValueError("Unsafe archive member")
+                    entry = zipfile.ZipInfo(member, (2026, 11, 6, 0, 0, 0))
+                    entry.compress_type = zipfile.ZIP_DEFLATED
+                    entry.external_attr = 0o644 << 16
+                    output.writestr(entry, file.read_bytes())
+            with zipfile.ZipFile(temporary) as checked:
+                if checked.testzip() is not None or sorted(checked.namelist()) != sorted(members):
+                    raise ValueError("ZIP membership/CRC failed")
+            archives.append({"file": archive.name, "version": package["version"], "bytes": temporary.stat().st_size, "members": len(members)})
+        summary = stage(destination / "release-summary.json")
+        summary.write_text(json.dumps({"archives": archives,
+            "upstreamRelease": "0.4.6", "deployment": "Vortex Enable/Deploy; automatic next startup", "manualApplyRequired": False,
+            "fixtureScenarios": len(report["scenarios"]),
+            "mixedReleaseScenarios": len(report.get("mixedReleaseCases", [])),
+            "totalFixtureScenarios": len(report["scenarios"]) + len(report.get("mixedReleaseCases", [])),
+            "publishedToNexus": False, "gameplayVerified": False,
+            "archiveWideHashScan": False}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        # Every archive is complete and checked before replacing any published
+        # file. Each rename is atomic; the summary becomes visible last.
+        for temporary, target in staged:
+            temporary.replace(target)
+    finally:
+        for temporary, _ in staged:
+            temporary.unlink(missing_ok=True)
     print(json.dumps({"archives": archives, "published": False, "manualApplyRequired": False}))
 
 

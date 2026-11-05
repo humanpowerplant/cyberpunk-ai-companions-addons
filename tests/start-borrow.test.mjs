@@ -48,9 +48,9 @@ test('PowerShell borrows compatible readiness without a PID record or claiming a
   const child=spawn('powershell.exe',['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-EncodedCommand',Buffer.from(script,'utf16le').toString('base64')],{windowsHide:true,stdio:['ignore','pipe','pipe']});
   let output='',error='';child.stdout.on('data',v=>output+=v);child.stderr.on('data',v=>error+=v);const [code]=await once(child,'close');return{code,output,error};
  };
- let result=await run();assert.equal(result.code,0,result.error);assert.equal(JSON.parse(result.output).service,'codex-companion-bridge');assert.deepEqual((await readdir(state)).sort(),['config.json','local-token.json']);
+ let result=await run();assert.equal(result.code,0,result.error);assert.equal(JSON.parse(result.output).service,'codex-companion-bridge');assert.deepEqual((await readdir(state)).sort(),['config.json','local-token.json','startup.lock']);
  const stale='{ this record belongs to nobody }';await writeFile(join(state,'server.pid.json'),stale);
- result=await run();assert.equal(result.code,0,result.error);assert.equal(await readFile(join(state,'server.pid.json'),'utf8'),stale);assert.deepEqual((await readdir(state)).sort(),['config.json','local-token.json','server.pid.json']);
+ result=await run();assert.equal(result.code,0,result.error);assert.equal(await readFile(join(state,'server.pid.json'),'utf8'),stale);assert.deepEqual((await readdir(state)).sort(),['config.json','local-token.json','server.pid.json','startup.lock']);
  identity={...identity,auth_mode:'api-key'};result=await run();assert.notEqual(result.code,0);assert.match(result.error,/incompatible service/);assert.equal(await readFile(join(state,'server.pid.json'),'utf8'),stale);
  identity={...identity,auth_mode:'chatgpt',local_auth:undefined};result=await run();assert.notEqual(result.code,0);assert.match(result.error,/older unauthenticated Codex bridge/);assert.equal(await readFile(join(state,'server.pid.json'),'utf8'),stale);
  identity={...identity,local_auth:'bearer-v1',fixture_wrong_proof:true};result=await run();assert.notEqual(result.code,0);assert.match(result.error,/Local bridge proof rejected/);

@@ -11,7 +11,7 @@
 | 本体の依存Mod | 元Modページの指定に従う |
 | 日本語単独 | 利用可。Codex/掛け合い拡張は任意 |
 | Codex/掛け合い単独 | 利用可。日本語拡張は任意 |
-| 両方 | 日本語 **1.0.4-rc.1** とCodex/掛け合い **1.2.2-rc.1** の組 |
+| 両方 | 日本語 **1.0.4-rc.2** とCodex/掛け合い **1.2.2-rc.2** の組 |
 | 旧版との混在 | 同一追加Modの重複は無効化。旧世代との組は適用診断の対象 |
 | 他バージョン・環境 | 本体0.4.4/0.4.5/将来版、ゲーム2.31、MO2、Linux/Protonは未確認 |
 
@@ -40,6 +40,6 @@
 
 Supported target: Windows, Vortex, Cyberpunk 2077 **2.5**, and AI Companions **0.4.6 Full install** with its original requirements. The game path is resolved relative to the installation, not pinned to one storefront or drive.
 
-Use either add-on or the matching pair **Japanese 1.0.4-rc.1 / Party Conversations and Codex Bridge 1.2.2-rc.1**. Recommended conflict order is base → Party/Codex → Japanese. Disable old duplicates. Mixing release generations can cause the new loaders to fall back to original code with a diagnostic. An old loader winning a file conflict cannot be assumed to detect new rules.
+Use either add-on or the matching pair **Japanese 1.0.4-rc.2 / Party Conversations and Codex Bridge 1.2.2-rc.2**. Recommended conflict order is base → Party/Codex → Japanese. Disable old duplicates. Mixing release generations can cause the new loaders to fall back to original code with a diagnostic. An old loader winning a file conflict cannot be assumed to detect new rules.
 
 Other base versions, game 2.31, MO2 and Proton are unverified. Automated source, installer and protocol fixtures are not gameplay, cross-PC, performance or voice-quality proof. The release candidate needs the manual checks in [Testing](TESTING.md).

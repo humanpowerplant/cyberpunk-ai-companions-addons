@@ -54,7 +54,7 @@ def main():
     output.mkdir(parents=True, exist_ok=False)
     (output / 'installers').mkdir()
     (output / 'source').mkdir()
-    source_zip = output / 'source/ai-companions-addons-source-046-rc1.zip'
+    source_zip = output / 'source/ai-companions-addons-source-046-rc2.zip'
     with zipfile.ZipFile(source_zip, 'x', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
         for relative, source in source_files:
             archive.write(source, 'companion-addons/' + relative)
@@ -68,11 +68,13 @@ def main():
     manifest = {'schema': 1, 'upstreamRelease': '0.4.6', 'gameVersion': '2.5',
                 'installers': release['archives'], 'sourceArchive': source_zip.relative_to(output).as_posix(),
                 'sourceFiles': len(source_files), 'publishedToNexus': False, 'liveGameUpdated': False,
-                'gameplayVerified': False, 'sensitiveStateRead': False}
+                'gameplayVerified': False, 'sensitiveStateRead': False,
+                'reviewGuide': 'project/docs/REVIEW_20261106.ja.md',
+                'decisionMemo': 'project/docs/REVIEW_DECISIONS.ja.md'}
     (output / 'KIT_MANIFEST.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
     start = '''# Nexusアップロード準備キット
 
-まず [公開手順](project/nexus/UPLOAD_GUIDE.ja.md) と [最終レビュー](project/docs/RELEASE_REVIEW.md) を開いてください。
+まず [公開手順](project/nexus/UPLOAD_GUIDE.ja.md)、[今回のレビュー](project/docs/REVIEW_20261106.ja.md)、[判断メモ](project/docs/REVIEW_DECISIONS.ja.md) を開いてください。
 
 - `installers/`：Nexusの各ページへ載せるインストール用ZIP2本。
 - `source/`：GitHubや開発者向け追加ファイルに使えるソースZIP。

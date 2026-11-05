@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "id": "japanese",
-  "release": "1.0.4-rc.1",
+  "release": "1.0.4-rc.2",
   "upstreamRelease": "0.4.6",
   "baseManifestSha256": "d0c93590e6142ca84a2cb19ce76b72c82e5de6f14dca2ebd0d38ca1ba36e9334",
   "files": [
@@ -154,9 +154,9 @@
     }
   ],
   "combinations": {},
-  "releaseFamily": "companion-addons-046-rc1",
+  "releaseFamily": "companion-addons-046-rc2",
   "supportedPairing": {
-    "japanese": "1.0.4-rc.1",
-    "codex": "1.2.2-rc.1"
+    "japanese": "1.0.4-rc.2",
+    "codex": "1.2.2-rc.2"
   }
 }

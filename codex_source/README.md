@@ -1,6 +1,6 @@
 # Codex Bridge portable source handoff
 
-Version 1.2.2-rc.1, backend 1.2.0-rc.1, targets AI Companions 0.4.6. `payload/game` contains 22 explicitly reviewed game-root files. `manifest.json` is regenerated with `python -B build_manifest.py` after intentional source changes; the common package builder owns auto-feature recipes and shared runtime-only composition. Vortex Deploy is sufficient for feature installation; there is no Apply.cmd step.
+Version 1.2.2-rc.2, backend 1.2.0-rc.2, targets AI Companions 0.4.6. `payload/game` contains 22 explicitly reviewed game-root files. `manifest.json` is regenerated with `python -B build_manifest.py` after intentional source changes; the common package builder owns auto-feature recipes and shared runtime-only composition. Vortex Deploy is sufficient for feature installation; there is no Apply.cmd step.
 
 New settings use CLI default / Auto reasoning. Legacy integer indices 1..10 and efforts 1..6 are unchanged. Model11 is recommended CLI default; model12 reads a validated custom identifier from per-user config.json. Effort7 is Auto. Account availability is not implied by a display preset. The add-on offers a 17-language primitive UI with English fallback; Japanese and English contain current setup and security descriptions.
 

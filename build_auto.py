@@ -19,11 +19,11 @@ CODE = "red4ext/plugins/AiNpcCyberpunkCode"
 CET = "bin/x64/plugins/cyber_engine_tweaks/mods/AiNpcCyberpunkMod"
 AUTO = "red4ext/plugins/AiNpcCommunityAuto"
 FOLDERS = {"japanese": "AiNpcJapaneseOptimization", "codex": "AiNpcCodexBridge"}
-VERSIONS = {"japanese": "1.0.4-rc.1", "codex": "1.2.2-rc.1"}
-RELEASE_FAMILY = "companion-addons-046-rc1"
+VERSIONS = {"japanese": "1.0.4-rc.2", "codex": "1.2.2-rc.2"}
+RELEASE_FAMILY = "companion-addons-046-rc2"
 TITLES = {"japanese": "AI-Companions-Japanese-Dialogue-Character-Pack", "codex": "AI-Companions-Party-Conversations-Codex-Bridge"}
 DOCS = ["README.ja.md", "README.en.md", "CHANGES.txt", "NEXUS_DESCRIPTION.ja.txt", "NEXUS_DESCRIPTION.en.txt"]
-COMMON_DOCS = ["PRIVACY.md", "COMPATIBILITY.md", "TROUBLESHOOTING.md", "TESTING.md", "CHANGELOG.md"]
+COMMON_DOCS = ["PRIVACY.md", "COMPATIBILITY.md", "TROUBLESHOOTING.md", "TESTING.md", "CHANGELOG.md", "REVIEW_20261106.ja.md", "REVIEW_DECISIONS.ja.md"]
 
 
 def read(file):

@@ -1,4 +1,4 @@
-Codex Bridge 1.2.2-rc.1 — backend 1.2.0-rc.1 / AI Companions 0.4.6用
+Codex Bridge 1.2.2-rc.2 — backend 1.2.0-rc.2 / AI Companions 0.4.6用
 
 Vortexで導入・有効化・Deployしてください。Apply.cmdの実行は不要です。元Modと作者指定の依存Modは別途必要です。賑やかな会話などの追加機能はGemini等でも利用でき、Codexを選ぶ場合だけ公式Codex CLIが必要です。
 

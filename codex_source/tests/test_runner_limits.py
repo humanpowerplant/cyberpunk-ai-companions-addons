@@ -14,6 +14,28 @@ import bridge
 
 
 class RunnerLimitTests(unittest.TestCase):
+    def test_cancelled_or_expired_auth_check_never_starts_generation(self):
+        for mode, expected in (("already-cancelled", "request_cancelled"),
+                               ("cancel-during-auth", "request_cancelled"),
+                               ("deadline-during-auth", "codex_timeout")):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory(prefix="codex-runner-fixture-") as directory:
+                config=dataclasses.replace(bridge.Config(),codex_home="isolated",timeout_seconds=5)
+                config.state_directory=Path(directory)
+                cancel=threading.Event()
+                if mode=="already-cancelled": cancel.set()
+                def auth(_config):
+                    if mode=="cancel-during-auth": cancel.set()
+                    return True
+                clock=[0,20] if mode=="deadline-during-auth" else [0,0]
+                with patch.object(bridge,"check_chatgpt_auth",side_effect=auth) as check, \
+                     patch.object(bridge.subprocess,"Popen") as launch, \
+                     patch.object(bridge.time,"monotonic",side_effect=clock):
+                    with self.assertRaises(bridge.BridgeError) as error:
+                        bridge.CodexRunner(config).run([{"role":"user","content":"fixture"}],[],cancel,lambda _:None)
+                    self.assertEqual(error.exception.code,expected)
+                    launch.assert_not_called()
+                    if mode=="already-cancelled": check.assert_not_called()
+
     def invoke(self, script, *, cancel=None, text="synthetic dialogue", output_limit=100000, timeout=3):
         with tempfile.TemporaryDirectory(prefix="codex-runner-fixture-") as directory:
             config = dataclasses.replace(bridge.Config(), codex_home="isolated", timeout_seconds=timeout, max_output_chars=output_limit)

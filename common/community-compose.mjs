@@ -9,8 +9,8 @@ const FEATURES = Object.freeze({codex: 'AiNpcCodexBridge', japanese: 'AiNpcJapan
 const PREFIXES = ['bridge/', 'launcher/', 'assets/', 'characters/', 'research/', 'vision/', 'licenses/client/'];
 const FILES = ['package.json', 'defaults/characters.json', 'defaults/multilingual-profiles.json', 'defaults/runtime-code-files.json'];
 const DIGEST = /^[0-9a-f]{64}$/;
-const RELEASE_FAMILY = 'companion-addons-046-rc1';
-const PAIRING = Object.freeze({codex: '1.2.2-rc.1', japanese: '1.0.4-rc.1'});
+const RELEASE_FAMILY = 'companion-addons-046-rc2';
+const PAIRING = Object.freeze({codex: '1.2.2-rc.2', japanese: '1.0.4-rc.2'});
 const plain = value => !!value && typeof value === 'object' && !Array.isArray(value);
 const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 const encode = value => Buffer.from(JSON.stringify(value, null, 2) + '\n');

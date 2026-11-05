@@ -1,5 +1,7 @@
 # Publication review — 0.4.6 release candidate
 
+Historical RC.1 record. For the current RC.2 findings and verification, see [the second review](REVIEW_20261106.ja.md).
+
 Review date: 2026-11-06. Release pair: **Japanese 1.0.4-rc.1 / Party Conversations and Codex Bridge 1.2.2-rc.1**. This report describes the candidate, not a stable-playthrough certification.
 
 ## Changes made during review

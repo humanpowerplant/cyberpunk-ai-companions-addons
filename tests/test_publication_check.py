@@ -84,6 +84,19 @@ class PublicationCheckTests(unittest.TestCase):
         self.assertIn('credential-value', self.codes(report))
         self.assertFalse(report['passed'])
 
+    def test_oversized_source_media_still_checks_forbidden_header(self):
+        self.put('media/cover.png',b'MZ' + b'\0' * 200)
+        self.inventory(['media/cover.png'])
+        report = module.check_repository(self.root,max_text=64)
+        self.assertFalse(report['passed'])
+        self.assertIn('disguised-binary',self.codes(report))
+
+    def test_oversized_zip_media_still_checks_forbidden_header(self):
+        file = self.package([('media/cover.png',b'RIFF' + b'\0' * 4 + b'WAVE' + b'\0' * 200)])
+        report = module.check_zip(file,max_text=64)
+        self.assertFalse(report['passed'])
+        self.assertIn('disguised-binary',self.codes(report))
+
     def test_inventory_excludes_private_generated_roots_and_unselected_file(self):
         self.put('source.py', 'print("portable")\n')
         self.put('build/config.json', 'not opened')

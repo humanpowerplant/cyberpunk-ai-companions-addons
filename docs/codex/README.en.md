@@ -1,6 +1,6 @@
 # AI Companions — Party Conversations and Codex Bridge
 
-**1.2.2-rc.1 / AI Companions 0.4.6 / Cyberpunk 2077 2.5 / Windows**
+**1.2.2-rc.2 / AI Companions 0.4.6 / Cyberpunk 2077 2.5 / Windows**
 
 Companions can talk to one another about shared experiences, retain directed memories of each other, and optionally hear a short reply from V. An optional local bridge lets Codex CLI provide the generated text. **The conversation features also work with Gemini and other supported text providers; using Codex is a separate choice.**
 
@@ -11,7 +11,7 @@ Companions can talk to one another about shared experiences, retain directed mem
 3. Disable older copies of this add-on and the old standalone **CodexBridge-Settings** add-on. Its menu is included here.
 4. Start the game normally. No `apply.cmd` step is needed. Open Companion Manager, then **Conversations** for the new conversation options.
 
-If using the Japanese add-on too, use **Japanese 1.0.4-rc.1 / this add-on 1.2.2-rc.1**. Conflict order: original mod → Party/Codex add-on → Japanese add-on. Do not combine old and new release generations.
+If using the Japanese add-on too, use **Japanese 1.0.4-rc.2 / this add-on 1.2.2-rc.2**. Conflict order: original mod → Party/Codex add-on → Japanese add-on. Do not combine old and new release generations.
 
 ## Start with conversation features
 
@@ -32,6 +32,10 @@ For a first trial, enable **asked-only** V replies, keep one reply per round, an
 V's automatic voice uses V's own reference, even when it shares the companions' voice engine. Subtitles are displayed before waiting for generated audio; if a usable voice route is unavailable, the line can remain as subtitles. Manual typed/microphone V-voice settings stay separate. Japanese V speech also requires a compatible engine and Japanese reference from the original mod.
 
 **Edit V personality** opens a local browser editor. Choose a V1–V4 memory slot manually when changing playthrough. These slots are not automatically linked to game save names. See [Privacy](../PRIVACY.md) for retained data and additional model requests.
+
+If normal replies feel too short, choose **AI provider → Reply length → Natural replies / Longer replies**. This selection explicitly takes priority over ordinary short-reply guidance in a character profile. Automatic remarks and combat lines keep their separate pacing.
+
+To see processing progress, enable **Privacy and help → Conversation status HUD**. It shows service, listening, reply, caption and audio status at the top left; Developer mode is not required.
 
 ## Optional: use Codex for replies
 

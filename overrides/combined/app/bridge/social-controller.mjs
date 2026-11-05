@@ -9,6 +9,9 @@ const text=(v,n=700)=>typeof v==='string'?Array.from(v.replace(/[\u0000-\u001f\u
 const plain=v=>v&&typeof v==='object'&&!Array.isArray(v);
 const sameToken=(a,b)=>!!a&&!!b&&a.scopeHash===b.scopeHash&&a.generation===b.generation;
 const lineText=v=>text(v,1200).replace(/\s+/g,' ');
+const SNAPSHOT_KINDS=Object.freeze({moneyAmount:'money',health:'condition',healthPercent:'condition',heat:'condition',
+ activity:'company',motion:'company',vehicle:'company',location:'location',district:'location',area:'location',
+ time:'time',hour:'time',minute:'time',gameTime:'lastTalk',gender:'about',lifepath:'about',level:'about',streetCred:'about',quest:'quest'});
 export function socialParticipants(rows) {
  if(!Array.isArray(rows)||rows.length<2||rows.length>5)return null;
  const out=[];
@@ -33,8 +36,8 @@ export function socialSettings(v={}) {
 }
 const boundary=w=>w?.worldToken?JSON.stringify([w.worldToken,w.generation]):null;
 export class SocialController {
- constructor({runtime,memory,planner,profilesForScope,generate,playVoice=()=>null,isIdle=()=>true,getWorld=()=>null,getLanguage=()=> 'ja',write,now=Date.now,log=()=>{},read=readFile}={}) {
-  Object.assign(this,{runtime,memory,planner,profilesForScope,generate,playVoice,isIdle,getWorld,getLanguage,write,now,log,read});
+ constructor({runtime,memory,planner,profilesForScope,generate,playVoice=()=>null,isIdle=()=>true,getWorld=()=>null,getLanguage=()=> 'ja',contextOff=()=>new Set(),write,now=Date.now,log=()=>{},read=readFile}={}) {
+  Object.assign(this,{runtime,memory,planner,profilesForScope,generate,playVoice,isIdle,getWorld,getLanguage,contextOff,write,now,log,read});
   this.settings=socialSettings();this.seen=new Map();this.rounds=new Map();this.reviews=new Set();this.reviewBusy=null;this.pending=null;this.polling=false;this.closed=false;this.world=null;this.lastReviewAt=-Infinity;
   this.transitions=Promise.resolve();this.transitioning=0;this.activeSlot=null;this.responseQueue=Promise.resolve();this.inputs=new Map();this.snapshotStamp=null;this.snapshotSerial=0;
  }
@@ -60,6 +63,7 @@ export class SocialController {
  #current(p){return this.pending===p&&!p.controller.signal.aborted&&!p.round.autoVBlocked&&this.#validRound(p.round)&&sameToken(p.scopeToken,this.memory.scopeToken)&&this.#validWorld(p.request,p.round,{bound:true});}
  #language(){const v=this.getLanguage?.();return typeof v==='string'&&/^[a-z]{2,3}(?:-[a-z0-9]{2,8})?$/i.test(v)?v:'ja';}
  #memoryLanguage(){return /^ja(?:-|$)/i.test(this.#language())?'ja':'en';}
+ #off(input){try{const off=this.contextOff(input);if(off&&typeof off.has==='function')return off;}catch{}return new Set(Object.values(SNAPSHOT_KINDS));}
  #inputWorldMatches(input,world){const known=input?.worldKnowledge;return !(input?.worldToken&&input.worldToken!==world?.worldToken)
   && !(known?.worldToken!==undefined&&known.worldToken!==world?.worldToken)
   && !(known?.generation!==undefined&&known.generation!==world?.generation);}
@@ -81,9 +85,9 @@ export class SocialController {
  observeTurn(input){const current=this.getWorld(),world=boundary(current);if(this.closed||!plain(input)||!world||world!==this.world||this.transitioning||this.activeSlot!==this.settings.socialMemorySlot||!this.memory.scopeToken)return;
   if(!this.#inputWorldMatches(input,current))return;
   if(typeof input?.requestId==='string'){this.inputs.set(input.requestId,{world,scope:this.settings.socialMemorySlot,scopeToken:this.memory.scopeToken});while(this.inputs.size>128)this.inputs.delete(this.inputs.keys().next().value);}
-  if(this.settings.socialMemory){const snapshot=this.#snapshot(input?.turnContext,input?.journal),fingerprint=this.#snapshotKey(input?.turnContext,input?.journal),stamp=this.snapshotStamp;
+  if(this.settings.socialMemory){const snapshot=this.#observation(input?.turnContext,input?.journal,input),fingerprint=this.#snapshotKey(input?.turnContext,input?.journal,input),stamp=this.snapshotStamp;
    if(snapshot&&(!stamp||stamp.world!==world||stamp.scope!==this.settings.socialMemorySlot||stamp.fingerprint!==fingerprint||this.now()-stamp.at>=300_000)){
-    if(this.memory.recordPlayerEvent({id:hash('state:'+world+':'+this.settings.socialMemorySlot+':'+this.now()+':'+(++this.snapshotSerial)),text:snapshot,source:'observed-game-state',at:this.now(),witnesses:[],scopeToken:this.memory.scopeToken}))this.snapshotStamp={world,scope:this.settings.socialMemorySlot,fingerprint,at:this.now()};
+    if(this.memory.recordPlayerEvent({id:hash('state:'+world+':'+this.settings.socialMemorySlot+':'+this.now()+':'+(++this.snapshotSerial)),...snapshot,source:'observed-game-state',at:this.now(),witnesses:[],scopeToken:this.memory.scopeToken}))this.snapshotStamp={world,scope:this.settings.socialMemorySlot,fingerprint,at:this.now()};
    }
   }
   const meta=parseSocialMeta(input?.reaction?.social);if(!meta)return;
@@ -92,7 +96,7 @@ export class SocialController {
   if(!r){r={roundId:meta.roundId,world,scope:this.settings.socialMemorySlot,scopeToken:this.memory.scopeToken,participants:meta.participants,source,npcLimit,started:this.now(),last:this.now(),input,ended:false,heard:[]};this.rounds.set(meta.roundId,r);}else{if(!this.#validRound(r)||r.source!==source)return;r.last=this.now();r.input=input;r.participants=meta.participants;}
   while(this.rounds.size>32){const old=this.rounds.keys().next().value;this.rounds.delete(old);this.reviews.delete(old);}
  }
- contextFor(input){if(!this.settings.socialMemory)return '';const m=parseSocialMeta(input?.reaction?.social),r=m&&this.rounds.get(m.roundId);return m&&this.#validRound(r)?this.memory.contextFor({speakerKey:input.profileKey,participants:m.participants,maxChars:2300,language:this.#memoryLanguage()}):'';}
+ contextFor(input){if(!this.settings.socialMemory)return '';const m=parseSocialMeta(input?.reaction?.social),r=m&&this.rounds.get(m.roundId);return m&&this.#validRound(r)?this.memory.contextFor({speakerKey:input.profileKey,participants:m.participants,maxChars:2300,language:this.#memoryLanguage(),off:this.#off(input)}):'';}
  notePlayerTurn(input,result={}){if(this.closed||!this.settings.socialMemory||input?.reaction)return;const captured=this.inputs.get(input?.requestId);if(!captured||captured.world!==boundary(this.getWorld())||captured.scope!==this.settings.socialMemorySlot||!sameToken(captured.scopeToken,this.memory.scopeToken)||this.transitioning)return;const spoken=text(result.userText||input?.text,600);if(!spoken)return;const prefix=this.#memoryLanguage()==='ja'?`Vが${text(input.name,80)||'相手'}に言ったこと：`:`V said to ${text(input.name,80)||'the companion'}: `;this.memory.recordPlayerEvent({id:hash('manual:'+input.requestId),text:prefix+spoken,source:'manual',at:this.now(),witnesses:[],scopeToken:captured.scopeToken});}
  cancel(reason='manual-input'){if(!['new-automatic-turn','superseded','generation-deadline','deadline','generation-failed','planning-failed'].includes(reason))for(const round of this.rounds.values())round.autoVBlocked=true;this.planner.cancelPending?.({reason});if(this.pending){const p=this.pending;this.pending=null;p.cancelled=true;p.controller.abort();p.line?.drop?.(reason);this.planner.releaseReservation?.({roundId:p.request.roundId});void this.#respond(p,{status:'done',respond:false,reason}).catch(()=>{});}this.reviewBusy?.abort();this.reviewBusy=null;}
  async #respond(p,extra){
@@ -110,20 +114,28 @@ export class SocialController {
    round.last=this.now();if(e.n>=e.of)round.ended=true;
    if(this.settings.socialMemory){
     this.memory.recordHeard({id:hash('heard:'+e.id),roundId:e.roundId,speakerKey:e.speakerKey,speakerName:text(e.speakerName,80),participants,text:text(e.text),at:e.at,source:round.source,scopeToken:round.scopeToken});
-    const info=this.#snapshot(e.turnContext??round.input?.turnContext,e.journal??round.input?.journal);
-    if(info)this.memory.recordPlayerEvent({id:hash('scene:'+e.roundId+':'+this.#snapshotKey(e.turnContext??round.input?.turnContext,e.journal??round.input?.journal)),text:info,source:'observed-game-state',at:e.at,witnesses:participants.map(p=>p.key).filter(k=>k!=='player-v'),scopeToken:round.scopeToken});
+    const info=this.#observation(e.turnContext??round.input?.turnContext,e.journal??round.input?.journal,round.input);
+    if(info)this.memory.recordPlayerEvent({id:hash('scene:'+e.roundId+':'+this.#snapshotKey(e.turnContext??round.input?.turnContext,e.journal??round.input?.journal,round.input)),...info,source:'observed-game-state',at:e.at,witnesses:participants.map(p=>p.key).filter(k=>k!=='player-v'),scopeToken:round.scopeToken});
    }
   }
  }
- #snapshotData(context,journal){
-  const data={},put=(k,v)=>{if(v===undefined)return;let raw;try{raw=JSON.stringify(v);}catch{return;}if(raw===undefined||raw.length>250)return;const next={...data,[k]:v};if(JSON.stringify(next).length<=570)data[k]=v;};
+ #snapshotData(context,journal,input){
+  // Absolute game seconds reveal the clock too, even when last-talk is on.
+  const off=this.#off(input),data={},put=(k,v)=>{if(v===undefined||off.has(SNAPSHOT_KINDS[k])||(k==='gameTime'&&off.has('time')))return;let raw;try{raw=JSON.stringify(v);}catch{return;}if(raw===undefined||raw.length>250)return;const next={...data,[k]:v};if(JSON.stringify(next).length<=570)data[k]=v;};
   // Keep complete JSON values. Cutting a serialized number or quest name halfway would manufacture a different memory.
-  for(const k of ['moneyAmount','health','activity','vehicle','location','district','time','gameTime','gender','lifepath'])put(k,context?.[k]);
-  if(journal){let raw;try{raw=JSON.stringify(journal);}catch{}if(raw&&raw.length<=250)put('quest',journal);else if(plain(journal)){const summary={};for(const k of ['title','name','objective','text','status'])if(typeof journal[k]==='string'&&journal[k].length<=100)summary[k]=journal[k];if(Object.keys(summary).length)put('quest',summary);}}
+  for(const k of ['moneyAmount','health','healthPercent','heat','activity','motion','vehicle','location','district','area','time','hour','minute','gameTime','gender','lifepath','level','streetCred'])put(k,context?.[k]);
+  if(plain(journal)&&!off.has('quest')){const summary={},quest=plain(journal.quest)?journal.quest:journal;
+   if(typeof journal.status==='string')summary.status=text(journal.status,24);
+   if(typeof (quest.title??quest.name)==='string')summary.title=text(quest.title??quest.name,100);
+   const objective=Array.isArray(quest.objectives)?quest.objectives.find(row=>row?.tracked===true):null;
+   const goal=objective?.text??quest.objective??quest.text;if(typeof goal==='string')summary.objective=text(goal,100);
+   if(Object.keys(summary).length)put('quest',summary);
+  }
   return data;
  }
- #snapshotKey(context,journal){const data=this.#snapshotData(context,journal);delete data.time;delete data.gameTime;return JSON.stringify(data);}
- #snapshot(context,journal){const out=JSON.stringify(this.#snapshotData(context,journal));return out==='{}'?'':(this.#memoryLanguage()==='ja'?'その時のゲーム情報（観測できた状態。結果や動機は推測しない）：':'Observed game state at that time (not an inferred outcome or motive): ')+out;}
+ #snapshotKey(context,journal,input){const data=this.#snapshotData(context,journal,input);delete data.time;delete data.gameTime;delete data.hour;delete data.minute;return JSON.stringify(data);}
+ #snapshot(context,journal,input){const out=JSON.stringify(this.#snapshotData(context,journal,input));return out==='{}'?'':(this.#memoryLanguage()==='ja'?'その時のゲーム情報（観測できた状態。結果や動機は推測しない）：':'Observed game state at that time (not an inferred outcome or motive): ')+out;}
+ #observation(context,journal,input){const facts=this.#snapshotData(context,journal,input);return Object.keys(facts).length?{text:this.#memoryLanguage()==='ja'?'当時に観測されたゲーム状態。現在の状態や動機の断定ではない。':'Observed game state at that time, not a claim about the current state or motive.',facts}:null;}
  async #request(req){if(!plain(req)||req.version!==1||!ROUND.test(req.roundId??'')||typeof req.id!=='string'||req.id.length>180||!Number.isSafeInteger(req.expiresAt)||req.expiresAt<=this.now()||req.expiresAt>this.now()+30_000)return;
   const round=this.rounds.get(req.roundId);if(!round||!this.#validRound(round)||!this.#validWorld(req,round,{bound:true})||!round.input?.reaction?.social?.autoV)return;
   if(round.autoVBlocked){await this.#respond({request:req,round},{status:'done',respond:false,reason:'interrupted-round'});return;}
@@ -140,7 +152,7 @@ export class SocialController {
  #heardTrigger(p){return p.round.heard.some(h=>h.speakerKey===p.request.trigger.speakerKey&&h.text===lineText(p.request.trigger.text));}
  async #plan(p){p.phase='planning';const profile=await this.profilesForScope(p.round.scope);
   const current=()=>this.#current(p);
-  try{if(!current())return;if(!this.isIdle())return this.cancel('foreground-busy');const answer=await this.planner.decide({settings:this.settings,roundId:p.request.roundId,trigger:p.request.trigger,participants:p.round.participants,lines:p.round.heard.slice(-6).map(h=>({speaker:h.speakerName,text:h.text})),playerProfile:profile.get(),replyLanguage:this.#language(),memoryContext:this.settings.socialMemory?this.memory.playerContext({query:p.request.trigger?.text,maxChars:2400,language:this.#memoryLanguage()}):'',liveContext:this.#snapshot(p.round.input?.turnContext,p.round.input?.journal),signal:p.controller.signal});
+  try{if(!current())return;if(!this.isIdle())return this.cancel('foreground-busy');const answer=await this.planner.decide({settings:this.settings,roundId:p.request.roundId,trigger:p.request.trigger,participants:p.round.participants,lines:p.round.heard.slice(-6).map(h=>({speaker:h.speakerName,text:h.text})),playerProfile:profile.get(),replyLanguage:this.#language(),memoryContext:this.settings.socialMemory?this.memory.playerContext({query:p.request.trigger?.text,maxChars:2400,language:this.#memoryLanguage(),off:this.#off(p.round.input)}):'',liveContext:this.#snapshot(p.round.input?.turnContext,p.round.input?.journal,p.round.input),signal:p.controller.signal});
    if(!current())return;if(this.now()>p.request.expiresAt){this.cancel('generation-deadline');return;}if(!answer.respond){await this.#respond(p,{status:'done',respond:false,reason:answer.reason});this.pending=null;return;}
    p.text=answer.text;p.phase='ready';p.readyAt=this.now();await this.#respond(p,{status:'ready',respond:true,text:p.text,voice:this.settings.socialVVoice});
   }catch(e){if(current()){await this.#respond(p,{status:'done',respond:false,reason:'generation-failed'});this.planner.releaseReservation?.({roundId:p.request.roundId});if(this.pending===p)this.pending=null;}this.log('V auto reply: '+(e?.code??e?.name??'failed'));}

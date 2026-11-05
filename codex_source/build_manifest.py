@@ -32,7 +32,7 @@ def main():
                 raise RuntimeError("Payload contains a development-machine path")
         entries.append({"path": name, "bytes": len(data), "sha256": sha256(data).hexdigest()})
     manifest = {
-        "schema": 1, "id": "codex-bridge", "version": "1.2.2-rc.1", "backendVersion": "1.2.0-rc.1", "addonVersion": "1.2.2-rc.1", "baseMod": "AI Companions 0.4.6",
+        "schema": 1, "id": "codex-bridge", "version": "1.2.2-rc.2", "backendVersion": "1.2.0-rc.2", "addonVersion": "1.2.2-rc.2", "baseMod": "AI Companions 0.4.6",
         "addonApi": "1.1", "payloadRoot": "payload/game", "files": entries,
         "settingsNamespace": "addons.codex-bridge", "defaultModel": "codex-default", "defaultEffort": "auto",
         "modelIndexDefault": 11, "effortIndexDefault": 7,

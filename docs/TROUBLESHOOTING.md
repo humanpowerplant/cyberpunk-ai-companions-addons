@@ -17,8 +17,11 @@
 | Codexが401/認証不一致になる | 両追加Modを同じ公開世代へ揃え、旧サーバー/旧手動版を終了して通常再起動。ローカルトークンを公開投稿しない |
 | ローカルポートの競合・検証失敗 | 別サービスが使っていないか確認。必要ならbridgeとCustom endpointのポートを両方変更。認証を無効にしたりLANへ公開したりしない |
 | モデル/推論量のエラー | まずCLI default/automaticへ。旧プリセットや任意IDが本人の契約で使えるとは限らない。CLI側のエラー表示を確認 |
+| invalid_saved_selection | ゲームとbridgeを終了し、`%LOCALAPPDATA%\AiNpcCodexBridge\selection.json`だけを別名で保管してから起動し、モデルを選び直す。config.jsonやcodex-home・認証をまとめて消す必要はない |
 | 429、使用上限、遅い | サービスの使用状況を確認し、発話頻度・関係更新・V自動返答を減らす。高頻度の再試行で解決しようとしない |
 | ゲーム終了後にhelperが残る | 少し待って状態確認。自動起動したものと以前に手動起動したものを区別し、手動サーバーはその起動元/同梱の停止手順で終了する。全Node/Pythonを一括終了しない |
+
+`startup.lock`という空ファイルが残ること自体は正常です。排他は開いているファイルハンドルで管理し、終了時に解放します。ファイルの存在をプロセスの残留と判断せず、起動中に削除しないでください。
 
 ## 報告に必要な最小情報
 
@@ -34,4 +37,5 @@
 - No V response: automatic V replies default off, and eligible replies are bounded. Voice is a separate opt-in and requires V's own reference.
 - Codex unavailable: check CLI capabilities, dedicated-home login, model access and the matching add-on pair. Never share authentication or the local token.
 - Port/auth/proof failure: stop an old manually launched server and restart normally, or configure an unused matching port. Do not disable authentication or expose loopback services.
+- `invalid_saved_selection`: close the game and bridge, keep a backup of only `%LOCALAPPDATA%\AiNpcCodexBridge\selection.json`, then restart and select the model again. Keep config, the Codex home and authentication intact. An empty `startup.lock` is normal and does not indicate a running process; do not delete it during startup.
 - Report only versions, selected options, a short reproduction and necessary sanitized errors. Do not upload saves, complete conversations or keys.

@@ -4748,7 +4748,7 @@ async function pollSettings(checkShutdown = true) {
     const speechChanged = naturalSpeech.update(settings), emotionsChanged = expressiveEmotions.update(settings);
     // Conversations > Dynamic info: the kinds of live game info the context may carry (bridge/dynamic-info.mjs); read by every provider's context builder.
     const dynamicInfoChanged = dynamicInfo.update(settings);
-    if (dynamicInfoChanged) console.error(`[DynamicInfo] ${dynamicInfo.describe()}`);
+    if (dynamicInfoChanged) { socialController?.cancel('dynamic-info-changed'); console.error(`[DynamicInfo] ${dynamicInfo.describe()}`); }
     // V's voice row is one list (Off / Pocket / Voxtral / OmniVoice). A saved Voxtral stays Voxtral without a Mistral key: a cloud voice loads no local
     // model (owner rule), so V's line is skipped with the reason and shows as text, and no Pocket worker loads for it (the poll runs this every time, so
     // it speaks as soon as a key is saved). While Mature content is on there is no cloud voice (owner decision 2026-10-20), so V speaks with Pocket
@@ -4934,7 +4934,7 @@ async function socialProfileForScope(slot) {
 const socialGenerate = args => mistralHost.socialComplete(args);
 const socialPlanner = new VReplyPlanner({generate: socialGenerate, log: line => console.error('[VAuto] ' + line)});
 socialController = await new SocialController({runtime, memory: socialMemory, planner: socialPlanner, profilesForScope: socialProfileForScope,
-  generate: socialGenerate, write: (path, value) => atomic(path, value), getWorld: currentBoundary,
+  generate: socialGenerate, write: (path, value) => atomic(path, value), getWorld: currentBoundary, contextOff: dynamicOff,
   getLanguage: () => multilingual.fixed ?? multilingual.lastLanguage ?? speechLanguage.evidence?.language ?? 'en',
   isIdle: () => !stopped && !active && !streaming && !mic.current && !phone.active && !voiceRouteReservation && !relationshipRouteReservation,
   playVoice: (request, options) => { vVoice.noteGender(request); return vVoice.startAutomatic({turnContext: request.turnContext, requestId: 'social-' + request.id, profileKey: 'player-v'}, request.text, options); },

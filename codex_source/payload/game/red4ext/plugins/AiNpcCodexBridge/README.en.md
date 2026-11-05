@@ -1,4 +1,4 @@
-Codex Bridge 1.2.2-rc.1 — backend 1.2.0-rc.1, AI Companions 0.4.6
+Codex Bridge 1.2.2-rc.2 — backend 1.2.0-rc.2, AI Companions 0.4.6
 
 Install and Deploy the add-on with Vortex. No Apply.cmd is needed. Install the base mod and its author-specified dependencies separately. The conversation features also work with Gemini and other supported providers; Codex CLI is required only when you choose Codex.
 

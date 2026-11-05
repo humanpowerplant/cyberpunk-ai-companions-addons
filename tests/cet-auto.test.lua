@@ -10,7 +10,7 @@ local function raises(fn, needle, label)
 end
 local function row(path, source) return {path = path, source = source} end
 local function descriptor(id, files, combinations)
-    return {schema = 1, id = id, upstreamRelease = '0.4.6', release = id == 'codex' and '1.2.2-rc.1' or '1.0.4-rc.1', releaseFamily = 'companion-addons-046-rc1', supportedPairing = {codex='1.2.2-rc.1',japanese='1.0.4-rc.1'}, files = files or {}, combinations = combinations}
+    return {schema = 1, id = id, upstreamRelease = '0.4.6', release = id == 'codex' and '1.2.2-rc.2' or '1.0.4-rc.2', releaseFamily = 'companion-addons-046-rc2', supportedPairing = {codex='1.2.2-rc.2',japanese='1.0.4-rc.2'}, files = files or {}, combinations = combinations}
 end
 local function fixture()
     local files, documents, reads, compiles, executions = {}, {}, {}, {}, {}

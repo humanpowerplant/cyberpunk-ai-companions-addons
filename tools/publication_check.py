@@ -178,13 +178,21 @@ def inspect_text(name: str, text: str) -> list[Finding]:
     return findings
 
 
-def inspect_bytes(name: str, data: bytes, max_text: int) -> tuple[list[Finding], str | None]:
-    findings = path_findings(name)
+def binary_findings(name: str, data: bytes) -> list[Finding]:
+    """Recognize forbidden payload headers without loading a large asset."""
     if (data.startswith(b'MZ') and len(data) > 64) or (data[:4] == b'RIFF' and data[8:12] == b'WAVE') or data[:4] == b'RDAR':
-        findings.append(Finding('error', 'disguised-binary', name, 'Executable or game/audio asset signature, regardless of filename.'))
+        return [Finding('error', 'disguised-binary', name, 'Executable or game/audio asset signature, regardless of filename.')]
+    return []
+
+
+def textual_name(name: str) -> bool:
     path = PurePosixPath(name)
-    textual = path.suffix.casefold() in TEXT_EXTENSIONS or path.name.casefold() in TEXT_EXTENSIONS or path.name.casefold().split('.')[0] in LEGAL_NAMES
-    if not textual:
+    return path.suffix.casefold() in TEXT_EXTENSIONS or path.name.casefold() in TEXT_EXTENSIONS or path.name.casefold().split('.')[0] in LEGAL_NAMES
+
+
+def inspect_bytes(name: str, data: bytes, max_text: int) -> tuple[list[Finding], str | None]:
+    findings = path_findings(name) + binary_findings(name, data)
+    if not textual_name(name):
         return findings, None
     if len(data) > max_text:
         findings.append(Finding('warning', 'large-text-not-inspected', name, 'Text exceeds the configured bounded content scan; review separately.'))
@@ -250,12 +258,14 @@ def check_repository(root: Path, allowlist: Path | None = None, strict_links: bo
         if any(problem.code in {'private-state-filename', 'private-state-directory'} for problem in problems):
             findings.extend(problems)
             continue
-        if file.stat().st_size > max_text and file.suffix.casefold() not in TEXT_EXTENSIONS:
-            findings.extend(problems)
-            continue
-        issues, text = inspect_bytes(name, file.read_bytes() if file.stat().st_size <= max_text else b'', max_text)
         if file.stat().st_size > max_text:
-            issues.append(Finding('warning', 'large-text-not-inspected', name, 'Text exceeds the bounded content scan; review separately.'))
+            findings.extend(problems)
+            with file.open('rb') as stream:
+                findings.extend(binary_findings(name, stream.read(65)))
+            if textual_name(name):
+                findings.append(Finding('warning', 'large-text-not-inspected', name, 'Text exceeds the bounded content scan; review separately.'))
+            continue
+        issues, text = inspect_bytes(name, file.read_bytes(), max_text)
         findings.extend(issues)
         if text is not None:
             texts[name] = text
@@ -358,7 +368,9 @@ def check_zip(file: Path, max_text: int = 2 * 1024 * 1024) -> dict:
                     continue
                 if member.file_size > max_text:
                     findings.extend(problems)
-                    if suffix in TEXT_EXTENSIONS:
+                    with archive.open(member) as stream:
+                        findings.extend(binary_findings(name, stream.read(65)))
+                    if textual_name(name):
                         findings.append(Finding('warning', 'large-text-not-inspected', name, 'ZIP text exceeds bounded content scan; review separately or raise --max-text-bytes.'))
                     continue
                 data = archive.read(member)

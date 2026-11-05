@@ -4,7 +4,7 @@
   "pages": {
     "japanese": {
       "title": "AI Companions 日本語会話・人物設定拡張",
-      "version": "1.0.4-rc.1",
+      "version": "1.0.4-rc.2",
       "summary": "AI Companions 0.4.6の人物像・話し方・一人称とゲーム状況を日本語で調整する追加Mod。Vortexで導入。元ModのFull installが必要です。",
       "categorySuggestion": "Translations",
       "language": "Japanese",
@@ -20,7 +20,7 @@
         "Quality of Life",
         "Japanese"
       ],
-      "archive": "AI-Companions-Japanese-Dialogue-Character-Pack-1.0.4-rc.1-Auto-Deploy-for-0.4.6.zip",
+      "archive": "AI-Companions-Japanese-Dialogue-Character-Pack-1.0.4-rc.2-Auto-Deploy-for-0.4.6.zip",
       "releaseType": "Release candidate; manual gameplay checklist remains separate",
       "descriptionFile": "japanese/description.ja.bbcode.txt",
       "cover": "../media/titlecards/japanese-cover-1920x1080.png",
@@ -30,7 +30,7 @@
     },
     "codex": {
       "title": "AI Companions - Party Conversations and Codex Bridge",
-      "version": "1.2.2-rc.1",
+      "version": "1.2.2-rc.2",
       "summary": "Companion-to-companion conversations, bounded optional replies by V, and an optional Codex CLI bridge. Also works with Gemini. Requires AI Companions 0.4.6 Full install.",
       "categorySuggestion": "Gameplay",
       "language": "English; Japanese guide included",
@@ -47,7 +47,7 @@
         "NPC Behaviours (AI)",
         "User Interface"
       ],
-      "archive": "AI-Companions-Party-Conversations-Codex-Bridge-1.2.2-rc.1-Auto-Deploy-for-0.4.6.zip",
+      "archive": "AI-Companions-Party-Conversations-Codex-Bridge-1.2.2-rc.2-Auto-Deploy-for-0.4.6.zip",
       "releaseType": "Release candidate; manual gameplay checklist remains separate",
       "descriptionFile": "codex/description.en.bbcode.txt",
       "cover": "../media/titlecards/codex-cover-1920x1080.png",

@@ -4,6 +4,8 @@ import importlib.util
 import json
 import tempfile
 import unittest
+from unittest.mock import patch
+import zipfile
 
 SOURCE = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('release_finalizer', SOURCE / 'finalize_auto.py')
@@ -55,6 +57,26 @@ class FinalizeTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'changed after functional'):
             module.main()
         self.assertFalse((self.root/'releases').exists())
+
+    def test_failed_second_archive_preserves_both_previous_releases(self):
+        destination = self.root/'releases';destination.mkdir()
+        for feature in ['japanese','codex']:
+            with zipfile.ZipFile(destination/(feature+'.zip'),'w') as output:
+                output.writestr('previous.txt','previous usable release')
+        self.write('releases/release-summary.json',{'previous':'keep until every new archive is ready'})
+        before = {file.name:file.read_bytes() for file in destination.iterdir()}
+        write = zipfile.ZipFile.writestr
+        calls = 0
+        def interrupted(output,*args,**kwargs):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise OSError('fixture: disk full while writing second archive')
+            return write(output,*args,**kwargs)
+        with patch.object(zipfile.ZipFile,'writestr',interrupted):
+            with self.assertRaisesRegex(OSError,'disk full'):
+                module.main()
+        self.assertEqual({file.name:file.read_bytes() for file in destination.iterdir()},before)
 
 if __name__=='__main__':
     unittest.main()

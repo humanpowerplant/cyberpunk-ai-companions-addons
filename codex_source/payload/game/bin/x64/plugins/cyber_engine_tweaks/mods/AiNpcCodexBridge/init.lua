@@ -42,7 +42,7 @@ local function register()
     end
     localization.load()
     local reason
-    handle, reason = api.register({id = 'codex-bridge', name = 'Codex Bridge', version = '1.2.2-rc.1', requires = '1.1'})
+    handle, reason = api.register({id = 'codex-bridge', name = 'Codex Bridge', version = '1.2.2-rc.2', requires = '1.1'})
     if not handle then print('[Codex Bridge] Registration failed: ' .. tostring(reason)); return end
     refresh()
 end

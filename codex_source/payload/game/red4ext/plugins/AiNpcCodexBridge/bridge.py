@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import Callable
 
 ROOT = Path(__file__).resolve().parent
-VERSION = "1.2.0-rc.1"
+VERSION = "1.2.0-rc.2"
 DISABLED_FEATURES = (
     "shell_tool", "unified_exec", "apps", "plugins", "hooks", "multi_agent",
     "multi_agent_v2", "browser_use", "browser_use_external", "computer_use",
@@ -180,6 +180,11 @@ def require_clean_instruction_home(config: Config) -> None:
         raise BridgeError("codex_home_instructions_detected_use_isolated_home", 503)
 
 
+def instruction_home_mode(config: Config) -> str:
+    # A pre-existing custom CODEX_HOME is not the dedicated home managed here.
+    return "dedicated" if config.codex_home == "isolated" else "legacy-shared"
+
+
 def child_environment(config: Config | None = None) -> dict[str, str]:
     """Retain Windows/auth paths and network routing, never inherited agent context/API keys."""
     allowed = {
@@ -304,7 +309,7 @@ def normalise_messages(body: dict, config: Config) -> tuple[list[dict], list[tup
         raise BridgeError("invalid_messages", 400)
     result, images, characters = [], [], 0
     for message in messages:
-        if not isinstance(message, dict) or message.get("role") not in {"system", "developer", "user", "assistant"}:
+        if not isinstance(message, dict) or not isinstance(message.get("role"), str) or message["role"] not in {"system", "developer", "user", "assistant"}:
             raise BridgeError("unsupported_message_role", 400)
         content = message.get("content")
         if isinstance(content, str):
@@ -396,8 +401,17 @@ class CodexRunner:
     def run(self, messages: list[dict], images: list[tuple[str, bytes]], cancel: threading.Event,
             on_text: Callable[[str], None]) -> dict:
         start = time.monotonic()
+        if cancel.is_set():
+            raise BridgeError("request_cancelled", 499)
         require_clean_instruction_home(self.config)
-        if not check_chatgpt_auth(self.config):
+        authenticated = check_chatgpt_auth(self.config)
+        # CLI status can take up to its own timeout. Do not start a generation
+        # after the requester disconnected or its total deadline already passed.
+        if cancel.is_set():
+            raise BridgeError("request_cancelled", 499)
+        if time.monotonic() - start > self.config.timeout_seconds:
+            raise BridgeError("codex_timeout", 504)
+        if not authenticated:
             raise BridgeError("chatgpt_login_required", 503)
         work_root = self.config.state_directory / "work"
         work_root.mkdir(parents=True, exist_ok=True)
@@ -551,7 +565,14 @@ class BridgeServer(ThreadingHTTPServer):
         self.selected_model = config.model or "codex-default"
         self.selected_effort = config.reasoning_effort
         if self.settings_path.exists():
-            saved = json.loads(self.settings_path.read_text(encoding="utf-8-sig"))
+            try:
+                if self.settings_path.is_symlink() or self.settings_path.stat().st_size > 16384:
+                    raise ValueError()
+                saved = json.loads(self.settings_path.read_text(encoding="utf-8-sig"))
+                if not isinstance(saved, dict):
+                    raise ValueError()
+            except (OSError, ValueError):
+                raise BridgeError("invalid_saved_selection", 503) from None
             self.selected_model = saved.get("model", self.selected_model)
             self.selected_effort = saved.get("reasoningEffort", self.selected_effort)
         validate_selection(self.selected_model, self.selected_effort, self.catalog)
@@ -661,7 +682,13 @@ class Handler(BaseHTTPRequestHandler):
 
     def authenticated(self):
         values = self.headers.get_all("Authorization", [])
-        return len(values) == 1 and hmac.compare_digest(values[0], "Bearer " + self.server.local_token)
+        if len(values) != 1:
+            return False
+        try:
+            candidate = values[0].encode("ascii")
+        except UnicodeEncodeError:
+            return False
+        return hmac.compare_digest(candidate, ("Bearer " + self.server.local_token).encode("ascii"))
 
     def do_GET(self):
         if not self.allowed():
@@ -677,7 +704,7 @@ class Handler(BaseHTTPRequestHandler):
             selection = self.server.selection()
             return self.reply_json(200, {"status": "ok", "service": "codex-companion-bridge", "version": 1,
                                          "local_auth": "bearer-v1",
-                                         "instruction_home": "dedicated" if self.server.config.codex_home else "legacy-shared",
+                                         "instruction_home": instruction_home_mode(self.server.config),
                                          "auth_mode": "chatgpt", "model": selection["model"],
                                          "reasoningEffort": selection["reasoningEffort"],
                                          "images": self.server.config.enable_images, **proof})
@@ -925,7 +952,7 @@ def main():
             raise BridgeError("chatgpt_login_required", 503)
         if args.check:
             print(json.dumps({"status": "ok", "version": VERSION, "auth_mode": "chatgpt",
-                              "instruction_home": "dedicated" if config.codex_home else "legacy-shared",
+                              "instruction_home": instruction_home_mode(config),
                               "disabled_feature_count": len(config.disabled_features)}), flush=True)
             return
         server = BridgeServer(config)

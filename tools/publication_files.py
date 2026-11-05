@@ -38,7 +38,7 @@ def generate():
         add('codex_source/payload/game/' + row['path'])
     tree('codex_source/tests', {'.py','.mjs'})
     tree('tests', {'.py','.mjs','.lua'})
-    for name in ['render_profile.mjs','publication_files.py','publication_check.py','render_media.py','run_node_tests.mjs','package_public_kit.py']:
+    for name in ['render_profile.mjs','publication_files.py','publication_check.py','render_media.py','run_node_tests.mjs','package_public_kit.py','diagnose_powershell.mjs']:
         if (ROOT / 'tools' / name).is_file():
             add('tools/' + name)
     for folder in ['docs', 'nexus', 'licenses']:

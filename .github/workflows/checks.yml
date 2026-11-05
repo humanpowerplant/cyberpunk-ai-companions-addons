@@ -27,6 +27,8 @@ jobs:
         run: python -X utf8 -m unittest discover -s codex_source/tests -p "test_*.py"
       - name: Publication scanner fixtures
         run: python -X utf8 -m unittest discover -s tests -p test_publication_check.py
+      - name: Synthetic PowerShell environment probe
+        run: node tools/diagnose_powershell.mjs
       - name: Node source and local transport fixtures
         run: node tools/run_node_tests.mjs
       - name: CET selector fixtures

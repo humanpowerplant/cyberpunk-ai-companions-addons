@@ -89,7 +89,7 @@ exit $LASTEXITCODE
 `);
   const outerHome = join(root, 'outer-home-marker');
   const run = spawnSync(powershell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', join(root, 'driver.ps1')],
-    {encoding:'utf8', windowsHide:true, timeout:15000,
+    {encoding:'utf8', windowsHide:true, timeout:15000, stdio:['ignore','pipe','pipe'],
       env:fixtureEnvironment(root, {CODEX_HOME:outerHome,FIXTURE_ANSWER:answer})});
   assert.equal(run.error, undefined, fixtureResult(run));
   return {root,state,settings,before,outerHome,run,
@@ -190,7 +190,7 @@ $result=Invoke-OfficialCodexLogin 'fixture-not-executable' (Join-Path $PSScriptR
 exit $result
 `);
   const run = spawnSync(powershell,['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',join(root,'fixture.ps1')],{
-    encoding:'utf8',windowsHide:true,timeout:15000,
+    encoding:'utf8',windowsHide:true,timeout:15000,stdio:['ignore','pipe','pipe'],
     env:fixtureEnvironment(root, {
       OPENAI_API_KEY:'fixture-dummy-not-a-real-provider-key',CODEX_API_KEY:'fixture-dummy-not-a-real-provider-key',
       CODEX_PROFILE:'fixture-inherited-profile',FIXTURE_UNRELATED_SECRET:'fixture-private-marker',CODEX_HOME:join(root,'wrong-home')})});

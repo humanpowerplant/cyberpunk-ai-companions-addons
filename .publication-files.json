@@ -213,6 +213,7 @@
     "tests/test_finalize.py",
     "tests/test_publication_check.py",
     "tests/tuning-installed.mjs",
+    "tools/diagnose_powershell.mjs",
     "tools/package_public_kit.py",
     "tools/publication_check.py",
     "tools/publication_files.py",

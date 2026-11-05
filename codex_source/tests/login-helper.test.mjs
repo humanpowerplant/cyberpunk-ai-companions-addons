@@ -15,6 +15,31 @@ const powershell = process.env.SystemRoot && join(process.env.SystemRoot, 'Syste
 const supported = process.platform === 'win32' && powershell && existsSync(powershell);
 const json = file => JSON.parse(readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
 
+function fixtureEnvironment(root, extra = {}) {
+  const local = join(root, 'local-data'), roaming = join(root, 'roaming-data');
+  mkdirSync(local, {recursive:true});
+  mkdirSync(roaming, {recursive:true});
+  const env = {};
+  // Retain only Windows routing paths. In particular, do not inherit hosted
+  // runners' PowerShell module catalogs, agent settings or provider keys.
+  for (const name of ['SystemRoot', 'WINDIR', 'SYSTEMDRIVE', 'COMSPEC', 'PATH', 'PATHEXT',
+    'ProgramFiles', 'ProgramFiles(x86)', 'ProgramW6432', 'ProgramData', 'ALLUSERSPROFILE', 'PUBLIC']) {
+    if (process.env[name] !== undefined) env[name] = process.env[name];
+  }
+  return {...env, TEMP:tmpdir(), TMP:tmpdir(), USERPROFILE:root, HOME:root,
+    LOCALAPPDATA:local, APPDATA:roaming,
+    // Use the Windows PowerShell 5.1 built-ins, never pwsh/hosted user modules.
+    PSModulePath:join(dirname(powershell), 'Modules'),
+    PSModuleAnalysisCachePath:join(local, 'ModuleAnalysisCache'), ...extra};
+}
+
+function fixtureResult(run) {
+  // Output belongs to the synthetic fixture: real login and model calls are
+  // replaced before it runs, and no inherited provider credentials are used.
+  return JSON.stringify({error:run.error?.message, status:run.status, signal:run.signal,
+    stdout:run.stdout, stderr:run.stderr}, null, 2);
+}
+
 function replaceOnce(text, before, after) {
   assert.equal(text.split(before).length - 1, 1, 'fixture stub anchor must still match actual product source exactly');
   return text.replace(before, after);
@@ -65,10 +90,8 @@ exit $LASTEXITCODE
   const outerHome = join(root, 'outer-home-marker');
   const run = spawnSync(powershell, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', join(root, 'driver.ps1')],
     {encoding:'utf8', windowsHide:true, timeout:15000,
-      env:{SystemRoot:process.env.SystemRoot,WINDIR:process.env.WINDIR,PATH:process.env.PATH,
-        TEMP:tmpdir(),TMP:tmpdir(),USERPROFILE:root,LOCALAPPDATA:join(root,'local-data'),APPDATA:join(root,'roaming-data'),
-        CODEX_HOME:outerHome,FIXTURE_ANSWER:answer}});
-  assert.equal(run.error, undefined, run.error?.message);
+      env:fixtureEnvironment(root, {CODEX_HOME:outerHome,FIXTURE_ANSWER:answer})});
+  assert.equal(run.error, undefined, fixtureResult(run));
   return {root,state,settings,before,outerHome,run,
     backups:() => readdirSync(state).filter(name => /^config\.before-isolated-[a-f0-9]+\.json$/.test(name)),
     login:() => json(join(root, 'fixture-login.json')),
@@ -168,11 +191,10 @@ exit $result
 `);
   const run = spawnSync(powershell,['-NoProfile','-NonInteractive','-ExecutionPolicy','Bypass','-File',join(root,'fixture.ps1')],{
     encoding:'utf8',windowsHide:true,timeout:15000,
-    env:{SystemRoot:process.env.SystemRoot,WINDIR:process.env.WINDIR,PATH:process.env.PATH,TEMP:tmpdir(),TMP:tmpdir(),
-      USERPROFILE:root,LOCALAPPDATA:join(root,'local-data'),APPDATA:join(root,'roaming-data'),
+    env:fixtureEnvironment(root, {
       OPENAI_API_KEY:'fixture-dummy-not-a-real-provider-key',CODEX_API_KEY:'fixture-dummy-not-a-real-provider-key',
-      CODEX_PROFILE:'fixture-inherited-profile',FIXTURE_UNRELATED_SECRET:'fixture-private-marker',CODEX_HOME:join(root,'wrong-home')}});
-  assert.equal(run.error,undefined,run.error?.message);
+      CODEX_PROFILE:'fixture-inherited-profile',FIXTURE_UNRELATED_SECRET:'fixture-private-marker',CODEX_HOME:join(root,'wrong-home')})});
+  assert.equal(run.error,undefined,fixtureResult(run));
   assert.equal(run.status,0,run.stderr);
   const observed=json(join(root,'environment.json'));
   assert.equal(observed.version,5);

@@ -16,7 +16,10 @@ test('deployed automatic startup reuses its owned bridge and parent exit closes 
   await mkdir(backend,{recursive:true});await mkdir(addon,{recursive:true});await mkdir(state,{recursive:true});
   for(const name of ['start.ps1','bridge-common.ps1','config.example.json'])await copyFile(resolve(source,name),resolve(backend,name));
   const reserve=createServer();reserve.listen(0,'127.0.0.1');await once(reserve,'listening');const port=reserve.address().port;await new Promise(r=>reserve.close(r));
-  await writeFile(resolve(state,'config.json'),JSON.stringify({host:'127.0.0.1',port,model:'',reasoning_effort:'low'}));
+  // Config validates a native executable even with the injected inert runner.
+  // Use the already-running Node executable as a marker; never discover or run
+  // a developer's installed Codex CLI, and keep clean CI machines independent.
+  await writeFile(resolve(state,'config.json'),JSON.stringify({host:'127.0.0.1',port,model:'',reasoning_effort:'low',codex_path:process.execPath}));
   const imports=JSON.stringify(source.replaceAll('\\','/'));
   await writeFile(resolve(backend,'bridge.py'),`import sys,json,argparse,threading\nfrom pathlib import Path\nsys.path.insert(0,${imports})\nimport bridge as implementation\np=argparse.ArgumentParser();p.add_argument('--config',type=Path);p.add_argument('--data-dir',type=Path);p.add_argument('--parent-pid',type=int,required=True);a=p.parse_args()\nc=implementation.Config.load(a.config);c.state_directory=a.data_dir\ns=implementation.BridgeServer(c,runner=object());parent=implementation.WindowsParentLifeline(a.parent_pid)\nt=threading.Thread(target=implementation.watch_parent,args=(s,parent),daemon=True);t.start()\ntry:s.serve_forever(poll_interval=.1)\nfinally:s.stopping.set();t.join(1);parent.close();s.server_close()\n`);
   // Give the implementation a distinct import name; the fixture itself is bridge.py.
@@ -33,7 +36,10 @@ test('deployed automatic startup reuses its owned bridge and parent exit closes 
     const auto=new CodexAutoStart({moduleUrl:pathToFileURL(resolve(addon,'bridge.mjs')).href,parentPid:parent.pid,stateDirectory:state,timeoutMs:10000,
       launch:(command,args,options)=>{const child=spawn(command,args,{...options,stdio:['ignore','ignore','pipe']});child.stderr.on('data',b=>launchError+=b);return child;}});
     console.log('fixture: automatic start');
-    await auto.ensure().catch(e=>{throw Error(e.message+': '+launchError);});console.log('fixture: first ready');assert.equal((await(await fetch(base+'/healthz',{signal:AbortSignal.timeout(3000)})).json()).service,'codex-companion-bridge');
+    await auto.ensure().catch(async e=>{
+      const logs=await Promise.all(['server.status.log','server.errors.log'].map(name=>readFile(resolve(state,name),'utf8').catch(()=>'')));
+      throw Error(e.message+': '+launchError+'\n'+logs.join('\n'));
+    });console.log('fixture: first ready');assert.equal((await(await fetch(base+'/healthz',{signal:AbortSignal.timeout(3000)})).json()).service,'codex-companion-bridge');
     const first=JSON.parse((await readFile(resolve(state,'server.pid.json'),'utf8')).replace(/^\uFEFF/,''));
     await auto.ensure();console.log('fixture: reused');const second=JSON.parse((await readFile(resolve(state,'server.pid.json'),'utf8')).replace(/^\uFEFF/,''));assert.equal(first.pid,second.pid);
     const ended=once(parent,'close');parent.kill();await ended;
@@ -41,8 +47,9 @@ test('deployed automatic startup reuses its owned bridge and parent exit closes 
     for(let i=0;i<30;i++){await new Promise(r=>setTimeout(r,100));try{await fetch(base+'/healthz',{signal:AbortSignal.timeout(300)});}catch{closed=true;break;}}
     assert.equal(closed,true,'Automatic service must end with its owning conversation process');
   } finally {
-    if(parent.exitCode===null)parent.kill();
-    await fetch(base+'/shutdown',{method:'POST',signal:AbortSignal.timeout(500)}).catch(()=>{});
+    // Its lifeline is this fixture's own child, including on assertion failure.
+    // The authenticated server correctly rejects an anonymous /shutdown.
+    if(parent.exitCode===null){const ended=once(parent,'close',{signal:AbortSignal.timeout(3000)}).catch(()=>{});parent.kill();await ended;}
     clearInterval(hold);
   }
 });
